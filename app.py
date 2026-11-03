@@ -142,6 +142,55 @@ def transit(req: TransitRequest):
     except Exception as e:
         raise HTTPException(400, f"คำนวณ Transit ไม่สำเร็จ: {e}")
 
+class AnnualRequest(Birth):
+    annual_year: int = Field(..., ge=1900, le=2200)
+
+
+@app.post("/api/annual")
+def annual(req: AnnualRequest):
+    try:
+        n = get_natal(req)
+
+        birth_year = int(req.date[:4])
+        age = req.annual_year - birth_year
+
+        if age < 0:
+            raise ValueError("ปีที่เลือกอยู่ก่อนปีเกิด")
+
+        house_num = (age % 12) + 1
+
+        asc_idx = SIGNS.index(n["angles"]["asc_sign"])
+        sign_idx = (asc_idx + house_num - 1) % 12
+
+        sign = SIGNS[sign_idx]
+        sign_th = SIGN_TH[sign_idx]
+        ruler = TRAD_RULER[sign_idx]
+
+        ruler_data = n["planet_map"][ruler]
+
+        return {
+            "year": req.annual_year,
+            "age": age,
+            "profection_house": house_num,
+            "house_th": HOUSE_TH[house_num - 1],
+            "sign": sign,
+            "sign_th": sign_th,
+            "sign_glyph": SIGN_GLYPH[sign_idx],
+            "lord_of_year": ruler,
+            "lord_position": ruler_data,
+            "ascendant": n["angles"],
+            "natal_planets": n["planets"],
+            "annual_period": {
+                "start": f"{req.annual_year}-{req.date[5:]}",
+                "end": f"{req.annual_year + 1}-{req.date[5:]}"
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            400, f"คำนวณ Annual Profection ไม่สำเร็จ: {e}"
+        )
+
 @app.post("/api/ask")
 def ask(payload: dict):
     try:
