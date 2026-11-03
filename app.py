@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).parent
-app = FastAPI(title="ROTA Personal Astrology - Friend Mode", version="3.4.0")
+app = FastAPI(title="ROTA Personal Astrology - Friend Mode", version="3.4.1")
 
 # ตั้ง ayanamsa แบบ Lahiri ครั้งเดียวตอนเริ่มระบบ (ใช้กับโหมด sidereal / ระบบไทย)
 swe.set_sid_mode(swe.SIDM_LAHIRI, 0, 0)
@@ -266,6 +266,22 @@ def retro_note(p):
     return " (ถอยหลัง ต้องทบทวนซ้ำก่อนลงมือ)" if p.get("retrograde") else ""
 
 
+def with_story_alias(sections):
+    """
+    ใส่คีย์ story / text ให้ทุก section ให้ครบทั้งคู่
+    เพื่อให้ frontend ที่อ่าน s.story หรือ s.text ก็ได้ ไม่เกิด 'undefined is not an object'
+    """
+    out = []
+    for s in sections:
+        s = dict(s)
+        body = s.get("story") or s.get("text") or ""
+        s["story"] = body
+        s["text"] = body
+        s.setdefault("title", "")
+        out.append(s)
+    return out
+
+
 def build_natal_friendly_reading(n, client_name=""):
     fname = get_friendly_name(client_name)
     pm = n["planets"]
@@ -337,7 +353,7 @@ def build_natal_friendly_reading(n, client_name=""):
             ),
         },
     ]
-    return sections
+    return with_story_alias(sections)
 
 
 # -----------------------------------------------------------------------------
@@ -432,7 +448,7 @@ def annual(req: AnnualRequest):
         money_focus = "ปีนี้เรื่องเงินเป็นประเด็นเด่นโดยตรง" if house_num in (2, 8, 11) else "เรื่องเงินไม่ใช่ธีมหลักของปีนี้ ให้ดูผ่านการลงมือในเรื่องของเรือนที่เปิด"
         love_focus = "ปีนี้เรื่องความรักและคู่เป็นประเด็นเด่นโดยตรง" if house_num in (5, 7) else "เรื่องความรักไม่ใช่ธีมหลักของปีนี้ แต่ยังเกิดขึ้นได้ผ่านสิ่งที่เรือนปีนี้พาไป"
 
-        sections = [
+        sections = with_story_alias([
             {"title": "✨ ภาพรวม & Focus หลักของปีนี้", "text": overview},
             {
                 "title": "💼 การงาน & การเรียนปีนี้",
@@ -457,7 +473,7 @@ def annual(req: AnnualRequest):
                     f"ทั้งคนมีคู่และคนโสดควรสังเกตคนที่เข้ามาผ่านเรื่องเหล่านี้"
                 ),
             },
-        ]
+        ])
 
         return {
             "client_name": req.name,
@@ -515,6 +531,7 @@ def transit(req: TransitRequest):
                 "retrograde": t["retrograde"],
                 "aspects": aspects,
                 "story": story,
+                "text": story,
             })
 
         # ไทม์ไลน์การย้ายเรือนของดาวใหญ่ตลอด months เดือน (สุ่มตรวจทุก 10 วัน)
