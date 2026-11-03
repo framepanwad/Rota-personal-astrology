@@ -20,7 +20,7 @@
     <label>ปีที่ต้องการดู
       <input id="annualYear" type="number" min="1900" max="2200" value="2026">
     </label>
-    <button class="primary" id="calcAnnual">Calculate Annual Profection</button>
+   <button class="primary" id="calcAnnual">✧ Generate Annual Reading</button>
     <div id="annualStatus" class="status"></div>
     <div id="annualResult"></div>
   </div>
@@ -38,33 +38,69 @@ function aspectsTable(a){if(!a.length)return '<div class="card muted">ไม่�
 $('calcNatal').onclick=async()=>{ $('natalStatus').textContent='กำลังคำนวณ…';$('natalResult').innerHTML='';try{const d=await api('/api/natal',birth());lastNatal=d;$('natalStatus').textContent='คำนวณสำเร็จด้วย Swiss Ephemeris';$('natalStatus').className='status success';const a=d.chart.angles;$('natalResult').innerHTML=`<div class="card"><div class="eyebrow">ASCENDANT</div><h2>${a.asc_glyph} ${a.asc_sign_th} · ${a.asc_degree}°</h2><p class="muted">ลัคนา ${a.asc_sign} · MC ${a.mc.toFixed(2)}°</p><p class="muted">Lord of ASC: ${a.houses[0].ruler}</p></div>`+planetTable(d.chart.planets)+houseTable(a.houses);localStorage.setItem('rota-birth',JSON.stringify(birth()));}catch(e){$('natalStatus').textContent=e.message;$('natalStatus').className='status error'}};
 $('calcTransit').onclick=async()=>{$('transitStatus').textContent='กำลังคำนวณ…';$('transitResult').innerHTML='';try{const d=await api('/api/transit',{...birth(),transit_date:$('td').value});$('transitStatus').textContent='คำนวณ Transit สำเร็จ';$('transitStatus').className='status success';$('transitResult').innerHTML=planetTable(d.transits)+aspectsTable(d.aspects)+`<p class="muted">${esc(d.engine_note)}</p>`;}catch(e){$('transitStatus').textContent=e.message;$('transitStatus').className='status error'}};
 $('askBtn').onclick=async()=>{$('askStatus').textContent='กำลังตรวจสอบพื้นดวง…';$('askResult').innerHTML='';try{const d=await api('/api/ask',{birth:birth(),question:$('question').value});$('askStatus').textContent='วิเคราะห์ข้อมูลดวงสำเร็จ';$('askStatus').className='status success';$('askResult').innerHTML=`<div class="stat"><b>Chart-based facts</b><p style="white-space:pre-wrap;line-height:1.7">${esc(d.answer)}</p></div>`;}catch(e){$('askStatus').textContent=e.message;$('askStatus').className='status error'}};$('calcAnnual').onclick=async()=>{
-  $('annualStatus').textContent='กำลังคำนวณ...';
+$('calcAnnual').onclick=async()=>{
+  $('annualStatus').textContent='กำลังอ่านดวงและสังเคราะห์คำทำนาย...';
   $('annualResult').innerHTML='';
   $('annualStatus').className='status';
+
   try{
     const d=await api('/api/annual',{
       ...birth(),
       annual_year:Number($('annualYear').value)
     });
-    $('annualStatus').textContent='คำนวณสำเร็จ';
+
+    const r=d.reading;
+    const p=d.lord_position;
+
+    $('annualStatus').textContent='สร้าง Annual Reading สำเร็จ';
     $('annualStatus').className='status success';
+
     $('annualResult').innerHTML=`
       <div class="card">
-        <div class="eyebrow">ANNUAL PROFECTION ${d.year}</div>
+        <div class="eyebrow">ROTA · ANNUAL REPORT ${d.year}</div>
         <h2>Age ${d.age}</h2>
         <h2>House ${d.profection_house} · ${esc(d.house_th)}</h2>
         <h2>${esc(d.sign_glyph)} ${esc(d.sign_th)}</h2>
-        <p>Profected Sign: ${esc(d.sign)}</p>
-        <p><b>Lord of the Year:</b> ${esc(d.lord_of_year)}</p>
-   <p><b>ตำแหน่งดาวกำเนิด:</b></p>
-<div class="stat">
-  <h3>${esc(d.lord_position.glyph)} ${esc(d.lord_position.thai)}</h3>
-  <p>${esc(d.lord_position.glyph_sign)} ${esc(d.lord_position.sign_th)} · ${d.lord_position.degree.toFixed(2)}° (${d.lord_position.minute}′)</p>
-  <p>เรือน ${d.lord_position.house} · ${esc(d.lord_position.house_th)}</p>
-  <p>สถานะ: ${d.lord_position.retrograde ? 'ถอยหลัง (Rx)' : 'เดินหน้า'}</p>
-</div>
-        <p class="muted">Period: ${esc(d.annual_period.start)} – ${esc(d.annual_period.end)}</p>
-      </div>`;
+
+        <p><b>Lord of the Year:</b> ${esc(p.glyph)} ${esc(p.thai)}</p>
+
+        <div class="stat">
+          <h3>${esc(p.glyph_sign)} ${esc(p.sign_th)} · ${p.degree.toFixed(2)}°</h3>
+          <p>เรือน ${p.house} · ${esc(p.house_th)}</p>
+          <p>สถานะ: ${p.retrograde?'ถอยหลัง (Rx)':'เดินหน้า'}</p>
+          <p>Essential Dignity: ${esc(r.dignity)}</p>
+          <p>${esc(r.dignity_note)}</p>
+          <p>Sect: ${esc(r.sect)}</p>
+          <p>Benefic of Sect: ${esc(r.benefic_of_sect)}</p>
+          <p>Malefic of Sect: ${esc(r.malefic_of_sect)}</p>
+        </div>
+
+        <p class="muted">
+          Period: ${esc(d.annual_period.start)}
+          – ${esc(d.annual_period.end)}
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="eyebrow">YOUR ANNUAL FORECAST</div>
+        <h2>คำพยากรณ์ประจำปี</h2>
+        ${r.sections.map((s,i)=>`
+          <div class="card">
+            <div class="eyebrow">SECTION ${String(i+1).padStart(2,'0')}</div>
+            <h3>${esc(s.title)}</h3>
+            <p style="white-space:pre-wrap;line-height:1.9">
+              ${esc(s.text)}
+            </p>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="notice">
+        การอ่านนี้สร้างจากตำแหน่งดาวกำเนิดและกฎ Traditional Astrology
+        ไม่ใช่การวินิจฉัยทางการแพทย์หรือการรับประกันเหตุการณ์ในอนาคต
+      </div>
+    `;
+
   }catch(e){
     $('annualStatus').textContent=e.message;
     $('annualStatus').className='status error';
