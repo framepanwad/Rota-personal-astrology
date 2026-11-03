@@ -1,43 +1,455 @@
 <!doctype html>
-<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#151d2a"><link rel="manifest" href="/static/manifest.webmanifest"><link rel="icon" href="/static/icon.svg"><title>ROTA · Personal Astrology</title>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#151d2a">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="icon" href="/static/icon.svg">
+<title>ROTA · Personal Astrology</title>
+
 <style>
-:root{color-scheme:dark;--bg:#111925;--panel:#202b3a;--line:#465163;--text:#f0e7d6;--muted:#b5bfce;--gold:#c2a574}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,-apple-system,sans-serif}main{max-width:850px;margin:auto;padding:16px 16px 45px}header{padding:22px;border-radius:20px;background:linear-gradient(130deg,#263448,#121923);margin-bottom:14px}.eyebrow{font-size:11px;letter-spacing:.2em;color:var(--gold)}h1{font-size:34px;letter-spacing:.14em;margin:5px 0}h2{font-size:21px;margin:8px 0}h3{font-size:15px;margin:4px 0}.muted{color:var(--muted);font-size:13px}.gold{color:var(--gold)}nav{display:flex;gap:5px;margin:14px 0;overflow:auto}nav button{flex:1;min-width:58px;padding:10px 3px;border:1px solid var(--line);border-radius:11px;background:var(--panel);color:var(--text);font-size:12px}nav button.active,.primary{background:var(--gold);color:#171717;border-color:var(--gold);font-weight:700}section{display:none}section.active{display:block}.card{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:15px;margin:11px 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat{background:#172231;border-radius:11px;padding:12px}button{cursor:pointer}button:disabled{opacity:.5} .primary{border:0;border-radius:10px;padding:12px 15px;width:100%;margin-top:8px}input,select,textarea{display:block;width:100%;margin-top:6px;padding:11px;border-radius:9px;border:1px solid var(--line);background:#172231;color:var(--text);font:inherit}label{display:block;margin:11px 0;color:var(--muted);font-size:13px}.tablewrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:12px;min-width:500px}td,th{padding:9px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}.notice{border-left:3px solid var(--gold);padding:10px 12px;background:#29303a;border-radius:5px;font-size:12px;color:var(--muted);line-height:1.6}.status{font-size:12px;color:var(--muted);padding:8px 0}.error{color:#ff9d9d}.success{color:#a8d9b2}.quick{display:block;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);color:var(--text);padding:14px;border-radius:12px}.wheel{display:block;width:min(100%,290px);margin:auto}footer{text-align:center;color:var(--muted);font-size:11px;padding:20px}@media(min-width:650px){main{padding-top:28px}}
-</style></head><body><main>
-<header><div class="eyebrow">YOUR PRIVATE ASTROLOGER</div><h1>ROTA.</h1><div class="muted">Traditional Western Astrology · Whole Sign Houses</div><hr style="border-color:#526071;margin:18px 0 12px"><div class="eyebrow">FUNCTIONAL PERSONAL EDITION · 02</div></header>
-<nav><button class="active" data-tab="home">⌂<br>Home</button><button data-tab="natal">◉<br>Natal</button><button data-tab="transit">☼<br>Transit</button><button data-tab="annual">✧<br>Annual</button><button data-tab="ask">✧<br>Ask</button></nav>
-<section id="home" class="active"><div class="eyebrow">YOUR ASTROLOGY PROFILE</div><h2>Welcome to ROTA</h2><div class="card"><div class="eyebrow">NATAL PROFILE</div><h2 id="homeDate">29 January 1996</h2><div class="muted" id="homeBirth">19:13 · Udon Thani, Thailand</div><div class="grid" style="margin-top:12px"><div class="stat"><div class="muted">Zodiac</div><b>Tropical</b></div><div class="stat"><div class="muted">House system</div><b>Whole Sign</b></div></div><button class="primary" data-go="natal">Calculate birth chart →</button></div><div class="grid"><button class="quick" data-go="natal"><b>Natal Chart</b><div class="muted">คำนวณดาว ลัคนา และเรือน</div></button><button class="quick" data-go="transit"><b>Transit</b><div class="muted">ดาวจรเทียบพื้นดวง</div></button></div><div class="card"><div class="eyebrow">ENGINE STATUS</div><div id="health" class="status">กำลังตรวจสอบเครื่องคำนวณ…</div><div class="notice">เวอร์ชันนี้คำนวณตำแหน่งดาวด้วย Swiss Ephemeris (Moshier) ผ่าน backend จริง ใช้ Tropical Zodiac และ Whole Sign Houses</div></div></section>
-<section id="natal"><div class="eyebrow">01 · NATAL FOUNDATION</div><h2>Birth Chart</h2><div class="card"><div class="grid"><label>วันเกิด<input id="bd" type="date" value="1996-01-29"></label><label>เวลาเกิด<input id="bt" type="time" value="19:13"></label></div><label>สถานที่เกิด<input id="bp" value="Udon Thani, Thailand"></label><div class="grid"><label>ละติจูด<input id="lat" type="number" step="0.0001" value="17.4138"></label><label>ลองจิจูด<input id="lon" type="number" step="0.0001" value="102.7872"></label></div><label>UTC offset (ชั่วโมง)<input id="tz" type="number" step="0.25" value="7"></label><button class="primary" id="calcNatal">Calculate Natal Chart</button><div id="natalStatus" class="status"></div></div><div id="natalResult"></div></section>
-<section id="transit"><div class="eyebrow">02 · PLANETARY MOVEMENT</div><h2>Transit Observatory</h2><div class="card"><label>วันที่ต้องการดู<input id="td" type="date"></label><button class="primary" id="calcTransit">Calculate Transits</button><div id="transitStatus" class="status"></div></div><div id="transitResult"></div></section>
-<section id="ask"><div class="eyebrow">03 · CHART ASSISTANT</div><h2>Ask Your Chart</h2><div class="card"><label>คำถาม<textarea id="question" rows="4" placeholder="เช่น ดาวเจ้าเรือนลัคนาของฉันอยู่ที่ไหน?"></textarea></label><button class="primary" id="askBtn">Analyze chart facts</button><div id="askStatus" class="status"></div><div id="askResult"></div></div><div class="notice">ส่วน Ask ในรุ่นนี้สรุปข้อเท็จจริงจากดวงที่คำนวณได้ ยังไม่ได้เชื่อม LLM/AI API จึงไม่แสดงคำพยากรณ์ที่แต่งขึ้น</div></section>
+:root{color-scheme:dark;--bg:#111925;--panel:#202b3a;--line:#465163;--text:#f0e7d6;--muted:#b5bfce;--gold:#c2a574}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,-apple-system,sans-serif}
+main{max-width:850px;margin:auto;padding:16px 16px 45px}
+header{padding:22px;border-radius:20px;background:linear-gradient(130deg,#263448,#121923);margin-bottom:14px}
+.eyebrow{font-size:11px;letter-spacing:.2em;color:var(--gold)}
+h1{font-size:34px;letter-spacing:.14em;margin:5px 0}
+h2{font-size:21px;margin:8px 0}
+h3{font-size:15px;margin:4px 0}
+.muted{color:var(--muted);font-size:13px}
+.gold{color:var(--gold)}
+nav{display:flex;gap:5px;margin:14px 0;overflow:auto}
+nav button{flex:1;min-width:58px;padding:10px 3px;border:1px solid var(--line);border-radius:11px;background:var(--panel);color:var(--text);font-size:12px}
+nav button.active,.primary{background:var(--gold);color:#171717;border-color:var(--gold);font-weight:700}
+section{display:none}
+section.active{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:15px;margin:11px 0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.stat{background:#172231;border-radius:11px;padding:12px}
+button{cursor:pointer}
+button:disabled{opacity:.5}
+.primary{border:0;border-radius:10px;padding:12px 15px;width:100%;margin-top:8px}
+input,select,textarea{display:block;width:100%;margin-top:6px;padding:11px;border-radius:9px;border:1px solid var(--line);background:#172231;color:var(--text);font:inherit}
+label{display:block;margin:11px 0;color:var(--muted);font-size:13px}
+.tablewrap{overflow:auto}
+table{border-collapse:collapse;width:100%;font-size:12px;min-width:500px}
+td,th{padding:9px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+.notice{border-left:3px solid var(--gold);padding:10px 12px;background:#29303a;border-radius:5px;font-size:12px;color:var(--muted);line-height:1.6}
+.status{font-size:12px;color:var(--muted);padding:8px 0}
+.error{color:#ff9d9d}
+.success{color:#a8d9b2}
+.quick{display:block;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);color:var(--text);padding:14px;border-radius:12px}
+.wheel{display:block;width:min(100%,290px);margin:auto}
+footer{text-align:center;color:var(--muted);font-size:11px;padding:20px}
+@media(min-width:650px){main{padding-top:28px}}
+</style>
+</head>
+
+<body>
+<main>
+
+<header>
+<div class="eyebrow">YOUR PRIVATE ASTROLOGER</div>
+<h1>ROTA.</h1>
+<div class="muted">Traditional Western Astrology · Whole Sign Houses</div>
+<hr style="border-color:#526071;margin:18px 0 12px">
+<div class="eyebrow">FUNCTIONAL PERSONAL EDITION · 02</div>
+</header>
+
+<nav>
+<button class="active" data-tab="home">⌂<br>Home</button>
+<button data-tab="natal">◉<br>Natal</button>
+<button data-tab="transit">☼<br>Transit</button>
+<button data-tab="annual">✧<br>Annual</button>
+<button data-tab="ask">✧<br>Ask</button>
+</nav>
+
+<section id="home" class="active">
+<div class="eyebrow">YOUR ASTROLOGY PROFILE</div>
+<h2>Welcome to ROTA</h2>
+
+<div class="card">
+<div class="eyebrow">NATAL PROFILE</div>
+<h2 id="homeDate">29 January 1996</h2>
+<div class="muted" id="homeBirth">19:13 · Udon Thani, Thailand</div>
+
+<div class="grid" style="margin-top:12px">
+<div class="stat">
+<div class="muted">Zodiac</div>
+<b>Tropical</b>
+</div>
+<div class="stat">
+<div class="muted">House system</div>
+<b>Whole Sign</b>
+</div>
+</div>
+
+<button class="primary" data-go="natal">Calculate birth chart →</button>
+</div>
+
+<div class="grid">
+<button class="quick" data-go="natal">
+<b>Natal Chart</b>
+<div class="muted">คำนวณดาว ลัคนา และเรือน</div>
+</button>
+<button class="quick" data-go="transit">
+<b>Transit</b>
+<div class="muted">ดาวจรเทียบพื้นดวง</div>
+</button>
+</div>
+
+<div class="card">
+<div class="eyebrow">ENGINE STATUS</div>
+<div id="health" class="status">กำลังตรวจสอบเครื่องคำนวณ…</div>
+<div class="notice">
+เวอร์ชันนี้คำนวณตำแหน่งดาวด้วย Swiss Ephemeris (Moshier) ผ่าน backend จริง ใช้ Tropical Zodiac และ Whole Sign Houses
+</div>
+</div>
+</section>
+
+<section id="natal">
+<div class="eyebrow">01 · NATAL FOUNDATION</div>
+<h2>Birth Chart</h2>
+
+<div class="card">
+<div class="grid">
+<label>วันเกิด
+<input id="bd" type="date" value="1996-01-29">
+</label>
+<label>เวลาเกิด
+<input id="bt" type="time" value="19:13">
+</label>
+</div>
+
+<label>สถานที่เกิด
+<input id="bp" value="Udon Thani, Thailand">
+</label>
+
+<div class="grid">
+<label>ละติจูด
+<input id="lat" type="number" step="0.0001" value="17.4138">
+</label>
+<label>ลองจิจูด
+<input id="lon" type="number" step="0.0001" value="102.7872">
+</label>
+</div>
+
+<label>UTC offset (ชั่วโมง)
+<input id="tz" type="number" step="0.25" value="7">
+</label>
+
+<button class="primary" id="calcNatal">Calculate Natal Chart</button>
+<div id="natalStatus" class="status"></div>
+</div>
+
+<div id="natalResult"></div>
+</section>
+
+<section id="transit">
+<div class="eyebrow">02 · PLANETARY MOVEMENT</div>
+<h2>Transit Observatory</h2>
+
+<div class="card">
+<label>วันที่ต้องการดู
+<input id="td" type="date">
+</label>
+<button class="primary" id="calcTransit">Calculate Transits</button>
+<div id="transitStatus" class="status"></div>
+</div>
+
+<div id="transitResult"></div>
+</section>
+
+<section id="ask">
+<div class="eyebrow">03 · CHART ASSISTANT</div>
+<h2>Ask Your Chart</h2>
+
+<div class="card">
+<label>คำถาม
+<textarea id="question" rows="4" placeholder="เช่น ดาวเจ้าเรือนลัคนาของฉันอยู่ที่ไหน?"></textarea>
+</label>
+
+<button class="primary" id="askBtn">Analyze chart facts</button>
+<div id="askStatus" class="status"></div>
+<div id="askResult"></div>
+</div>
+
+<div class="notice">
+ส่วน Ask ในรุ่นนี้สรุปข้อเท็จจริงจากดวงที่คำนวณได้ ยังไม่ได้เชื่อม LLM/AI API จึงไม่แสดงคำพยากรณ์ที่แต่งขึ้น
+</div>
+</section>
+
 <section id="annual">
-  <div class="eyebrow">04 · ANNUAL PROFECTION</div>
-  <h2>Annual Profection</h2>
+<div class="eyebrow">04 · ANNUAL PROFECTION</div>
+<h2>Annual Profection</h2>
+
+<div class="card">
+<div class="notice">
+คำนวณเรือนประจำปีและ Lord of the Year ตามหลัก Traditional Astrology · Whole Sign
+</div>
+
+<label>ปีที่ต้องการดู
+<input id="annualYear" type="number" min="1900" max="2200" value="2026">
+</label>
+
+<button class="primary" id="calcAnnual">✧ Generate Annual Reading</button>
+<div id="annualStatus" class="status"></div>
+<div id="annualResult"></div>
+</div>
+</section>
+
+<footer>
+ROTA · PRIVATE ASTROLOGY LAB · V2.0<br>
+Swiss Ephemeris calculation · Moshier mode
+</footer>
+
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+let lastNatal=null;
+
+function show(id){
+  document.querySelectorAll('main section').forEach(s=>{
+    s.classList.toggle('active',s.id===id);
+  });
+
+  document.querySelectorAll('nav button').forEach(b=>{
+    b.classList.toggle('active',b.dataset.tab===id);
+  });
+}
+
+document.querySelectorAll('[data-tab]').forEach(b=>{
+  b.onclick=()=>show(b.dataset.tab);
+});
+
+document.querySelectorAll('[data-go]').forEach(b=>{
+  b.onclick=()=>show(b.dataset.go);
+});
+
+function birth(){
+  return {
+    date:$('bd').value,
+    time:$('bt').value,
+    place:$('bp').value,
+    lat:Number($('lat').value),
+    lon:Number($('lon').value),
+    tz:Number($('tz').value)
+  };
+}
+
+function esc(s){
+  return String(s??'').replace(/[&<>"']/g,c=>({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;'
+  }[c]));
+}
+
+async function api(path,data){
+  const r=await fetch(path,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(data)
+  });
+
+  const j=await r.json();
+
+  if(!r.ok)throw new Error(j.detail||'Server error');
+
+  return j;
+}
+
+function planetTable(rows){
+  return `
   <div class="card">
-    <div class="notice">
-      คำนวณเรือนประจำปีและ Lord of the Year
-      ตามหลัก Traditional Astrology · Whole Sign
+    <h3>Planetary positions</h3>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ดาว</th>
+            <th>ราศี</th>
+            <th>องศา</th>
+            <th>เรือน</th>
+            <th>สถานะ</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(p=>`
+            <tr>
+              <td>${p.glyph} ${p.thai}</td>
+              <td>${p.glyph_sign} ${p.sign_th}</td>
+              <td>${p.degree.toFixed(2)}°</td>
+              <td>${p.house||'-'} ${p.house_th||''}</td>
+              <td>${p.retrograde?'ถอยหลัง':'เดินหน้า'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
     </div>
-    <label>ปีที่ต้องการดู
-      <input id="annualYear" type="number" min="1900" max="2200" value="2026">
-    </label>
-   <button class="primary" id="calcAnnual">✧ Generate Annual Reading</button>
-    <div id="annualStatus" class="status"></div>
-    <div id="annualResult"></div>
-  </div>
-</section><footer>ROTA · PRIVATE ASTROLOGY LAB · V2.0<br>Swiss Ephemeris calculation · Moshier mode</footer>
-</main><script>
-const $=id=>document.getElementById(id);let lastNatal=null;
-function show(id){document.querySelectorAll('main section').forEach(s=>s.classList.toggle('active',s.id===id));document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));}
-document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>show(b.dataset.tab));document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
-function birth(){return {date:$('bd').value,time:$('bt').value,place:$('bp').value,lat:Number($('lat').value),lon:Number($('lon').value),tz:Number($('tz').value)}}
-function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function api(path,data){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw new Error(j.detail||'Server error');return j}
-function planetTable(rows){return `<div class="card"><h3>Planetary positions</h3><div class="tablewrap"><table><thead><tr><th>ดาว</th><th>ราศี</th><th>องศา</th><th>เรือน</th><th>สถานะ</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${p.glyph} ${p.thai}</td><td>${p.glyph_sign} ${p.sign_th}</td><td>${p.degree.toFixed(2)}°</td><td>${p.house||'-'} ${p.house_th||''}</td><td>${p.retrograde?'ถอยหลัง':'เดินหน้า'}</td></tr>`).join('')}</tbody></table></div></div>`}
-function houseTable(h){return `<div class="card"><h3>Whole Sign Houses</h3><div class="tablewrap"><table><thead><tr><th>เรือน</th><th>ราศี</th><th>เจ้าเรือน (Traditional)</th><th>หัวข้อ</th></tr></thead><tbody>${h.map(x=>`<tr><td>${x.house}</td><td>${x.glyph} ${x.sign_th}</td><td>${x.ruler}</td><td>${x.meaning}</td></tr>`).join('')}</tbody></table></div></div>`}
-function aspectsTable(a){if(!a.length)return '<div class="card muted">ไม่พบมุมสัมพันธ์ใน orb ที่กำหนด</div>';return `<div class="card"><h3>Major aspects (orb ≤ 5°)</h3><div class="tablewrap"><table><thead><tr><th>ดาวจร</th><th>มุม</th><th>ดาวกำเนิด</th><th>Orb</th><th>สถานะ</th></tr></thead><tbody>${a.map(x=>`<tr><td>${x.transit_th}</td><td>${x.aspect_th}</td><td>${x.natal_th}</td><td>${x.orb}°</td><td>${x.motion_th||''}</td></tr>`).join('')}</tbody></table></div></div>`}
-$('calcNatal').onclick=async()=>{ $('natalStatus').textContent='กำลังคำนวณ…';$('natalResult').innerHTML='';try{const d=await api('/api/natal',birth());lastNatal=d;$('natalStatus').textContent='คำนวณสำเร็จด้วย Swiss Ephemeris';$('natalStatus').className='status success';const a=d.chart.angles;$('natalResult').innerHTML=`<div class="card"><div class="eyebrow">ASCENDANT</div><h2>${a.asc_glyph} ${a.asc_sign_th} · ${a.asc_degree}°</h2><p class="muted">ลัคนา ${a.asc_sign} · MC ${a.mc.toFixed(2)}°</p><p class="muted">Lord of ASC: ${a.houses[0].ruler}</p></div>`+planetTable(d.chart.planets)+houseTable(a.houses);localStorage.setItem('rota-birth',JSON.stringify(birth()));}catch(e){$('natalStatus').textContent=e.message;$('natalStatus').className='status error'}};
-$('calcTransit').onclick=async()=>{$('transitStatus').textContent='กำลังคำนวณ…';$('transitResult').innerHTML='';try{const d=await api('/api/transit',{...birth(),transit_date:$('td').value});$('transitStatus').textContent='คำนวณ Transit สำเร็จ';$('transitStatus').className='status success';$('transitResult').innerHTML=planetTable(d.transits)+aspectsTable(d.aspects)+`<p class="muted">${esc(d.engine_note)}</p>`;}catch(e){$('transitStatus').textContent=e.message;$('transitStatus').className='status error'}};
-$('askBtn').onclick=async()=>{$('askStatus').textContent='กำลังตรวจสอบพื้นดวง…';$('askResult').innerHTML='';try{const d=await api('/api/ask',{birth:birth(),question:$('question').value});$('askStatus').textContent='วิเคราะห์ข้อมูลดวงสำเร็จ';$('askStatus').className='status success';$('askResult').innerHTML=`<div class="stat"><b>Chart-based facts</b><p style="white-space:pre-wrap;line-height:1.7">${esc(d.answer)}</p></div>`;}catch(e){$('askStatus').textContent=e.message;$('askStatus').className='status error'}};$('calcAnnual').onclick=async()=>{
+  </div>`;
+}
+
+function houseTable(h){
+  return `
+  <div class="card">
+    <h3>Whole Sign Houses</h3>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>เรือน</th>
+            <th>ราศี</th>
+            <th>เจ้าเรือน (Traditional)</th>
+            <th>หัวข้อ</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${h.map(x=>`
+            <tr>
+              <td>${x.house}</td>
+              <td>${x.glyph} ${x.sign_th}</td>
+              <td>${x.ruler}</td>
+              <td>${x.meaning}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function aspectsTable(a){
+  if(!a.length){
+    return '<div class="card muted">ไม่พบมุมสัมพันธ์ใน orb ที่กำหนด</div>';
+  }
+
+  return `
+  <div class="card">
+    <h3>Major aspects (orb ≤ 5°)</h3>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ดาวจร</th>
+            <th>มุม</th>
+            <th>ดาวกำเนิด</th>
+            <th>Orb</th>
+            <th>สถานะ</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${a.map(x=>`
+            <tr>
+              <td>${x.transit_th}</td>
+              <td>${x.aspect_th}</td>
+              <td>${x.natal_th}</td>
+              <td>${x.orb}°</td>
+              <td>${x.motion_th||''}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+/* NATAL CHART */
+
+$('calcNatal').onclick=async()=>{
+  $('natalStatus').textContent='กำลังคำนวณ…';
+  $('natalResult').innerHTML='';
+
+  try{
+    const d=await api('/api/natal',birth());
+
+    lastNatal=d;
+
+    $('natalStatus').textContent='คำนวณสำเร็จด้วย Swiss Ephemeris';
+    $('natalStatus').className='status success';
+
+    const a=d.chart.angles;
+
+    $('natalResult').innerHTML=`
+      <div class="card">
+        <div class="eyebrow">ASCENDANT</div>
+        <h2>${a.asc_glyph} ${a.asc_sign_th} · ${a.asc_degree}°</h2>
+        <p class="muted">ลัคนา ${a.asc_sign} · MC ${a.mc.toFixed(2)}°</p>
+        <p class="muted">Lord of ASC: ${a.houses[0].ruler}</p>
+      </div>
+    `+planetTable(d.chart.planets)+houseTable(a.houses);
+
+    localStorage.setItem('rota-birth',JSON.stringify(birth()));
+
+  }catch(e){
+    $('natalStatus').textContent=e.message;
+    $('natalStatus').className='status error';
+  }
+};
+
+/* TRANSIT */
+
+$('calcTransit').onclick=async()=>{
+  $('transitStatus').textContent='กำลังคำนวณ…';
+  $('transitResult').innerHTML='';
+
+  try{
+    const d=await api('/api/transit',{
+      ...birth(),
+      transit_date:$('td').value
+    });
+
+    $('transitStatus').textContent='คำนวณ Transit สำเร็จ';
+    $('transitStatus').className='status success';
+
+    $('transitResult').innerHTML=
+      planetTable(d.transits)+
+      aspectsTable(d.aspects)+
+      `<p class="muted">${esc(d.engine_note)}</p>`;
+
+  }catch(e){
+    $('transitStatus').textContent=e.message;
+    $('transitStatus').className='status error';
+  }
+};
+
+/* ASK YOUR CHART */
+
+$('askBtn').onclick=async()=>{
+  $('askStatus').textContent='กำลังตรวจสอบพื้นดวง…';
+  $('askResult').innerHTML='';
+
+  try{
+    const d=await api('/api/ask',{
+      birth:birth(),
+      question:$('question').value
+    });
+
+    $('askStatus').textContent='วิเคราะห์ข้อมูลดวงสำเร็จ';
+    $('askStatus').className='status success';
+
+    $('askResult').innerHTML=`
+      <div class="stat">
+        <b>Chart-based facts</b>
+        <p style="white-space:pre-wrap;line-height:1.7">
+          ${esc(d.answer)}
+        </p>
+      </div>
+    `;
+
+  }catch(e){
+    $('askStatus').textContent=e.message;
+    $('askStatus').className='status error';
+  }
+};
+
+/* ANNUAL PROFECTION */
+
 $('calcAnnual').onclick=async()=>{
   $('annualStatus').textContent='กำลังอ่านดวงและสังเคราะห์คำทำนาย...';
   $('annualResult').innerHTML='';
@@ -58,20 +470,31 @@ $('calcAnnual').onclick=async()=>{
     $('annualResult').innerHTML=`
       <div class="card">
         <div class="eyebrow">ROTA · ANNUAL REPORT ${d.year}</div>
+
         <h2>Age ${d.age}</h2>
         <h2>House ${d.profection_house} · ${esc(d.house_th)}</h2>
         <h2>${esc(d.sign_glyph)} ${esc(d.sign_th)}</h2>
 
-        <p><b>Lord of the Year:</b> ${esc(p.glyph)} ${esc(p.thai)}</p>
+        <p>
+          <b>Lord of the Year:</b>
+          ${esc(p.glyph)} ${esc(p.thai)}
+        </p>
 
         <div class="stat">
           <h3>${esc(p.glyph_sign)} ${esc(p.sign_th)} · ${p.degree.toFixed(2)}°</h3>
+
           <p>เรือน ${p.house} · ${esc(p.house_th)}</p>
+
           <p>สถานะ: ${p.retrograde?'ถอยหลัง (Rx)':'เดินหน้า'}</p>
+
           <p>Essential Dignity: ${esc(r.dignity)}</p>
+
           <p>${esc(r.dignity_note)}</p>
+
           <p>Sect: ${esc(r.sect)}</p>
+
           <p>Benefic of Sect: ${esc(r.benefic_of_sect)}</p>
+
           <p>Malefic of Sect: ${esc(r.malefic_of_sect)}</p>
         </div>
 
@@ -84,10 +507,15 @@ $('calcAnnual').onclick=async()=>{
       <div class="card">
         <div class="eyebrow">YOUR ANNUAL FORECAST</div>
         <h2>คำพยากรณ์ประจำปี</h2>
+
         ${r.sections.map((s,i)=>`
           <div class="card">
-            <div class="eyebrow">SECTION ${String(i+1).padStart(2,'0')}</div>
+            <div class="eyebrow">
+              SECTION ${String(i+1).padStart(2,'0')}
+            </div>
+
             <h3>${esc(s.title)}</h3>
+
             <p style="white-space:pre-wrap;line-height:1.9">
               ${esc(s.text)}
             </p>
@@ -106,9 +534,42 @@ $('calcAnnual').onclick=async()=>{
     $('annualStatus').className='status error';
   }
 };
+
+/* INITIAL SETTINGS */
+
 $('td').value=new Date().toISOString().slice(0,10);
-try{const saved=JSON.parse(localStorage.getItem('rota-birth')||'null');if(saved)for(const [k,v] of Object.entries(saved)){const el=$(k);if(el)el.value=v;}}catch(e){}
-const d0=new Date($('bd').value+'T12:00:00');$('homeDate').textContent=d0.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
-fetch('/api/health').then(r=>r.json()).then(x=>$('health').textContent='● Online · '+x.engine+' · '+x.version).catch(()=>$('health').textContent='Backend unavailable — เปิดผ่านเซิร์ฟเวอร์ ROTA ไม่ใช่เปิดไฟล์ HTML ตรง ๆ');
-if('serviceWorker'in navigator)navigator.serviceWorker.register('/static/sw.js').catch(()=>{});
-</script></body></html>
+
+try{
+  const saved=JSON.parse(localStorage.getItem('rota-birth')||'null');
+
+  if(saved){
+    for(const [k,v] of Object.entries(saved)){
+      const el=$(k);
+      if(el)el.value=v;
+    }
+  }
+}catch(e){}
+
+const d0=new Date($('bd').value+'T12:00:00');
+
+$('homeDate').textContent=d0.toLocaleDateString('en-GB',{
+  day:'numeric',
+  month:'long',
+  year:'numeric'
+});
+
+fetch('/api/health')
+.then(r=>r.json())
+.then(x=>{
+  $('health').textContent='● Online · '+x.engine+' · '+x.version;
+})
+.catch(()=>{
+  $('health').textContent='Backend unavailable — เปิดผ่านเซิร์ฟเวอร์ ROTA ไม่ใช่เปิดไฟล์ HTML ตรง ๆ';
+});
+
+if('serviceWorker'in navigator){
+  navigator.serviceWorker.register('/static/sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
