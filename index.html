@@ -56,8 +56,13 @@ $('askBtn').onclick=async()=>{$('askStatus').textContent='กำลังตร�
         <h2>${esc(d.sign_glyph)} ${esc(d.sign_th)}</h2>
         <p>Profected Sign: ${esc(d.sign)}</p>
         <p><b>Lord of the Year:</b> ${esc(d.lord_of_year)}</p>
-        <p><b>ตำแหน่งดาวกำเนิด:</b></p>
-        <p>${esc(JSON.stringify(d.lord_position))}</p>
+   <p><b>ตำแหน่งดาวกำเนิด:</b></p>
+<div class="stat">
+  <h3>${esc(d.lord_position.glyph)} ${esc(d.lord_position.thai)}</h3>
+  <p>${esc(d.lord_position.glyph_sign)} ${esc(d.lord_position.sign_th)} · ${d.lord_position.degree.toFixed(2)}° (${d.lord_position.minute}′)</p>
+  <p>เรือน ${d.lord_position.house} · ${esc(d.lord_position.house_th)}</p>
+  <p>สถานะ: ${d.lord_position.retrograde ? 'ถอยหลัง (Rx)' : 'เดินหน้า'}</p>
+</div>
         <p class="muted">Period: ${esc(d.annual_period.start)} – ${esc(d.annual_period.end)}</p>
       </div>`;
   }catch(e){
