@@ -54,6 +54,7 @@ FLAGS = swe.FLG_MOSEPH | swe.FLG_SPEED
 SLOW_PLANETS = ["Jupiter","Saturn","Uranus","Neptune","Pluto"]
 
 class Birth(BaseModel):
+    name: str = ""
     date: str
     time: str
     place: str = "Udon Thani, Thailand"
@@ -145,12 +146,50 @@ def dignity_of(planet,sign):
     if fall.get(planet)==sign: return "นิจ (Fall)","ต้องใช้เวลาและวินัยพัฒนาคุณภาพของดาว ไม่ได้แปลว่าจะเกิดเรื่องร้ายโดยอัตโนมัติ"
     return "ไม่มี Essential Dignity หลัก","ประเมินจากเรือน Sect และมุมสัมพันธ์ร่วมกัน ไม่ตัดสินว่าดีหรือเสียจากราศีอย่างเดียว"
 
-def natal_summary(n):
-    a=n["angles"]; pm=n["planet_map"]; sect=sect_data(n)
-    asc_ruler=TRAD_RULER[a["asc_sign_index"]]; rd=pm[asc_ruler]
-    dignote=dignity_of(asc_ruler,rd["sign"])
-    return {"ascendant":a,"asc_ruler":asc_ruler,"ruler_position":rd,"sect":sect,"ruler_dignity":dignote,
-      "story":f"ลัคนา{a['asc_sign_th']} ทำให้ดาวเจ้าเรือนลัคนาคือ{PLANET_TH[asc_ruler]} ({asc_ruler}) เป็นตัวตั้งต้นในการอ่านชีวิต ดาวดวงนี้ไปอยู่เรือน{rd['house']} ({HOUSE_TH[rd['house']-1]}) ในราศี{rd['sign_th']} ดังนั้นเรื่องตัวตนและการตัดสินใจมักพัวพันกับ{HOUSE_TOPICS[rd['house']]}. นี่เป็นจุดเชื่อมหลักที่ต้องอ่านร่วมกับดาวอื่น ไม่ใช่คำตัดสินบุคลิกจากลัคนาเพียงอย่างเดียว."}
+def natal_summary(n, client_name=""):
+    """Compatibility wrapper: always return the same complete reading as Natal."""
+    return detailed_natal_reading(n, client_name)
+
+
+def addressed(name, text):
+    """Use the client's preferred name naturally, without mechanically replacing every pronoun."""
+    name = (name or "").strip()
+    if not name:
+        return text.replace("เจ้าชะตา", "คุณ")
+    # Replace the generic second-person address with the exact display name.
+    return text.replace("เจ้าชะตา", name).replace("คุณ", name)
+
+
+def planet_aspects_for(n, planet, orb_limit=6):
+    rows=[]
+    base=n["planet_map"][planet]
+    for other, p in n["planet_map"].items():
+        if other == planet:
+            continue
+        diff=wrapdiff(base["longitude"],p["longitude"])
+        for angle, asp, asp_th in ASPECTS:
+            orb=abs(diff-angle)
+            if orb <= orb_limit:
+                rows.append({"planet":other,"planet_th":PLANET_TH[other],"aspect":asp,"aspect_th":asp_th,"orb":round(orb,2)})
+    return sorted(rows,key=lambda x:x["orb"])
+
+
+def evidence_tone(planet, sign, house, aspects, sect):
+    """Short plain-language synthesis from actual chart factors; no event certainty from one factor."""
+    dignity=dignity_of(planet,sign)[0]
+    supportive=[x for x in aspects if x["aspect"] in ("Trine","Sextile")]
+    tense=[x for x in aspects if x["aspect"] in ("Square","Opposition")]
+    if dignity.startswith(("เกษตร","อุจจ์")) and supportive:
+        return "เป็นจุดแข็งที่ใช้ได้จริง มีทั้งกำลังของดาวและแรงส่งจากมุมสัมพันธ์ ถ้าเจ้าตัวลงมือ เรื่องนี้มีโอกาสพัฒนาได้ไกลกว่าค่าเฉลี่ย"
+    if dignity.startswith(("ประ","นิจ")) and tense:
+        return "จุดนี้ไม่ได้มาแบบสบาย ๆ ต้องออกแรงแก้และเรียนรู้จากข้อจำกัด มีโอกาสเจอเรื่องให้หงุดหงิดหรือรู้สึกว่าต้องแบกมากกว่าคนอื่น แต่ไม่ได้แปลว่าพัง แปลว่าต้องวางเกมให้ดี"
+    if tense:
+        return "เรื่องนี้มีแรงเสียดทานอยู่จริง มักต้องตัดสินใจหรือปรับวิธีรับมือก่อนถึงจะได้ผล อย่าคิดว่าทุกอย่างจะไหลไปเอง"
+    if supportive:
+        return "มีจังหวะและทรัพยากรช่วยอยู่พอสมควร เป็นเรื่องที่ต่อยอดได้ ถ้ากล้าหยิบโอกาสและไม่ปล่อยให้ผ่านไปเฉย ๆ"
+    if dignity.startswith(("เกษตร","อุจจ์")):
+        return "ดาวมีพื้นกำลังดี เป็นทุนที่เจ้าตัวพัฒนาให้เห็นผลได้ แต่ผลลัพธ์ยังขึ้นกับการใช้ชีวิตและจังหวะเวลา"
+    return "เป็นเรื่องที่ต้องดูจากภาพรวมและประสบการณ์จริง ไม่ได้เด่นจนควรทุ่มหมดหน้าตัก และไม่ได้เสียจนต้องกลัวไปก่อน"
 
 # Narrative synthesis rules: a transit is interpreted through planet + natal house + natal planet/aspect + linked house rulers.
 def transit_orb(planet, aspect):
@@ -160,23 +199,29 @@ def transit_orb(planet, aspect):
     return 0.8
 
 def event_story(tname,nname,aspect,house,orb,motion,sect):
-    pmeaning=PLANET_MEANING[tname]; nmeaning=PLANET_MEANING[nname]
     topic=HOUSE_TOPICS[house]
-    aspect_tone={"Conjunction":"เรื่องนี้ถูกดึงขึ้นมาอยู่ตรงหน้า ต้องรับมือหรือเริ่มต้นบางอย่าง","Sextile":"มีช่องทางหรือคนช่วย แต่ต้องเป็นฝ่ายหยิบโอกาสและลงมือ","Trine":"เรื่องมีแนวโน้มไหลลื่นขึ้น ได้แรงสนับสนุนหรือเห็นทางออกง่ายขึ้น","Square":"มีแรงกดดันให้แก้ปัญหา จัดลำดับความสำคัญ หรือเปลี่ยนวิธีเดิม","Opposition":"ต้องหาจุดสมดุลระหว่างสองฝ่ายหรือสองความต้องการที่ดึงกันคนละทาง"}[aspect]
-    timing="กำลังเข้าใกล้จุดพีก" if motion=="Applying" else "ผ่านจุดพีกแล้ว แต่ผลยังค่อย ๆ คลี่คลาย" if motion=="Separating" else "อยู่ใกล้จุดพีก"
-    examples={
-      "Jupiter":"ตัวอย่างเช่น มีคนแนะนำโอกาสใหม่ ได้เรียนรู้สิ่งที่ต่อยอดงาน หรือมีช่องทางที่ทำให้เรื่องนี้ขยายตัว แต่ควรดูต้นทุนและความคาดหวังให้สมจริง",
-      "Saturn":"ตัวอย่างเช่น ต้องรับผิดชอบงานหรือข้อตกลงมากขึ้น ต้องวางแผนระยะยาว หรือพบว่าบางอย่างต้องใช้เวลาและวินัยกว่าจะเห็นผล",
-      "Uranus":"ตัวอย่างเช่น ตารางหรือแผนเดิมเปลี่ยนกะทันหัน มีข้อเสนอที่ไม่คาดคิด หรือเริ่มอยากหลุดจากวิธีเดิม ๆ ควรเผื่อแผนสำรอง",
-      "Neptune":"ตัวอย่างเช่น เรื่องที่เคยคิดว่าชัดอาจยังมีข้อมูลไม่ครบ หรือมีความคาดหวังสูงกว่าความจริง ควรถามให้ชัดและตรวจรายละเอียดก่อนตกลง",
-      "Pluto":"ตัวอย่างเช่น ประเด็นเรื่องอำนาจ การควบคุม หรือความไว้ใจที่เคยเลี่ยงอาจต้องคุยกันจริงจัง เป็นช่วงปรับโครงสร้างมากกว่าการแก้ผิวเผิน",
-      "Mars":"ตัวอย่างเช่น มีเรื่องเร่งให้ตัดสินใจ แข่งขัน หรือเผชิญหน้ากับปัญหาที่ค้างอยู่ ควรระวังการตอบโต้เร็วเกินไป",
-      "Venus":"ตัวอย่างเช่น มีการเจรจาเรื่องความสัมพันธ์ เงิน หรือความพึงพอใจ อาจเป็นจังหวะปรับความเข้าใจหรือทบทวนสิ่งที่ให้คุณค่า",
-      "Mercury":"ตัวอย่างเช่น มีข่าว เอกสาร นัดหมาย การพูดคุย หรือการตัดสินใจที่ต้องใช้ข้อมูล ควรตรวจวันเวลาและรายละเอียดให้ครบ",
-      "Sun":"ตัวอย่างเช่น เรื่องนี้กลายเป็นจุดสนใจ ต้องแสดงจุดยืน รับผิดชอบ หรือได้รับการมองเห็นมากขึ้น",
-      "Moon":"ตัวอย่างเช่น อารมณ์ ความต้องการเรื่องความมั่นคง หรือเรื่องบ้านและครอบครัวทำให้ต้องปรับแผนในช่วงนั้น"
+    aspect_tone={
+      "Conjunction":"เรื่องนี้ถูกดึงขึ้นมาตรงหน้า เลี่ยงยาก และต้องตัดสินใจหรือจัดการบางอย่าง",
+      "Sextile":"มีช่องเปิดหรือคนช่วยอยู่ แต่โอกาสจะเกิดผลก็ต่อเมื่อคุณลงมือ",
+      "Trine":"เป็นจังหวะที่เรื่องนี้เดินง่ายขึ้น มีแรงช่วยหรือทางออกที่มองเห็นชัดกว่าเดิม",
+      "Square":"มีแรงกดดันหรือเรื่องติดขัดเข้ามาบังคับให้แก้ ไม่เหมาะกับการปล่อยปัญหาค้างไว้",
+      "Opposition":"ต้องจัดสมดุลระหว่างความต้องการของตัวเองกับคนอื่น หรือระหว่างสองเรื่องที่แย่งเวลาและพลังกัน"
+    }[aspect]
+    planet_scenarios={
+      "Jupiter":"ข่าวดี โอกาส ข้อเสนอ การเรียนรู้ หรือคนที่เปิดประตูให้ แต่ต้องเช็กว่าผลประโยชน์คุ้มกับต้นทุนจริงไหม",
+      "Saturn":"ภาระ หน้าที่ กฎเกณฑ์ เส้นตาย หรือข้อตกลงระยะยาวที่ต้องรับผิดชอบมากขึ้น อะไรที่ไม่มั่นคงจะถูกทดสอบ",
+      "Uranus":"แผนเปลี่ยนกะทันหัน ตารางรวน ความต้องการอิสระ หรือข้อเสนอที่ไม่อยู่ในแผนเดิม ควรมีแผนสำรอง",
+      "Neptune":"ข้อมูลไม่ครบ ความคาดหวังคลุมเครือ หรือเรื่องที่ต้องใช้เวลาแยกความจริงออกจากความรู้สึก อย่าเซ็นหรือตกลงเพราะเกรงใจ",
+      "Pluto":"เกมอำนาจ ความไว้ใจ การควบคุม หรือเรื่องที่กดไว้นานกลับมาให้จัดการแบบถอนรากถอนโคน",
+      "Mars":"เรื่องเร่งด่วน การแข่งขัน การปะทะ หรือการตัดสินใจเร็ว ระวังคำพูดและการทำอะไรตอนอารมณ์ขึ้น",
+      "Venus":"ความสัมพันธ์ การเงิน การต่อรอง หรือสิ่งที่ทำให้รู้สึกมีคุณค่า มีโอกาสปรับความเข้าใจหรือเลือกสิ่งที่สบายใจกว่า",
+      "Mercury":"ข่าว ข้อความ เอกสาร การนัดหมาย การเดินทางสั้น ๆ และการเจรจา ตรวจรายละเอียดให้ครบก่อนตอบตกลง",
+      "Sun":"เรื่องนี้กลายเป็นจุดสนใจ ต้องแสดงตัว รับผิดชอบ หรือมีคนจับตามองผลงานมากขึ้น",
+      "Moon":"อารมณ์ ความต้องการความมั่นคง บ้าน หรือครอบครัวทำให้ต้องปรับแผนและจัดลำดับความสำคัญ"
     }[tname]
-    return (f"ดาวจร{PLANET_TH[tname]} ({tname}) ซึ่งแทนเรื่อง{pmeaning} กำลังทำมุม{dict((x[1],x[2]) for x in ASPECTS)[aspect]}กับดาวกำเนิด{PLANET_TH[nname]} ({nname}) ที่แทนเรื่อง{nmeaning}. จุดนี้ไปกระตุ้นเรือนที่ {house} ซึ่งเกี่ยวกับ{topic}. {aspect_tone} {examples} ตอนนี้{timing} (orb {orb:.2f}°) จึงควรจับตาประเด็นนี้เป็นพิเศษ แต่ไม่ได้หมายความว่าเหตุการณ์จะเกิดแบบเดียวกันกับทุกคน ต้องดูบริบทชีวิตจริงประกอบ")
+    timing="กำลังเข้าใกล้จุดพีก" if motion=="Applying" else "ผ่านจุดพีกแล้ว แต่ผลยังค่อย ๆ คลี่คลาย" if motion=="Separating" else "อยู่ใกล้จุดพีก"
+    risk="อย่าตัดสินใจด้วยความรีบหรือความกลัว และควรตรวจข้อเท็จจริงก่อน" if aspect in ("Square","Opposition") or tname in ("Saturn","Mars","Neptune") else "อย่าปล่อยโอกาสผ่านไปเพราะรอให้ทุกอย่างพร้อม 100%"
+    return (f"ช่วงนี้เรื่อง{topic}มีแนวโน้มถูกดึงขึ้นมาให้จัดการ เพราะดาวจร{PLANET_TH[tname]}กำลังกระทบดาวกำเนิด{PLANET_TH[nname]}ในมุม{dict((x[1],x[2]) for x in ASPECTS)[aspect]} {aspect_tone} ภาพที่อาจเห็นในชีวิตจริงคือ{planet_scenarios} {risk} ตอนนี้{timing} โดยมี orb {orb:.2f}° จึงให้น้ำหนักกับประเด็นนี้ตามความใกล้ของมุมดาว ไม่ได้แปลว่าทุกคนจะเจอเหตุการณ์เดียวกัน แต่เป็นหน้าต่างเวลาที่เรื่องนี้มีโอกาสเด่นขึ้น")
 
 def event_intensity(orb,planet,aspect):
     if orb<=0.25: return "สูงมาก"
@@ -318,20 +363,27 @@ def house_ruler_map(n):
         out[h]={"house":h,"sign":SIGNS[si],"sign_th":SIGN_TH[si],"ruler":ruler,"ruler_th":PLANET_TH[ruler],"ruler_house":rp["house"],"ruler_sign":rp["sign"],"ruler_sign_th":rp["sign_th"],"dignity":dignity_of(ruler,rp["sign"])[0],"retrograde":rp["retrograde"]}
     return out
 
-def detailed_natal_reading(n):
+def detailed_natal_reading(n, client_name=""):
     pm=n["planet_map"]; a=n["angles"]; sect=sect_data(n); lots=lot_positions(n); rulers=house_ruler_map(n)
     asc_ruler=TRAD_RULER[a["asc_sign_index"]]; asc=pm[asc_ruler]
     moon=pm["Moon"]; sun=pm["Sun"]
     sections=[]
     def add(title,text): sections.append({"title":title,"text":text})
     asc_dig=dignity_of(asc_ruler,asc["sign"])
-    add("01 · ตัวตนและบุคลิกที่คนอื่นเห็น",f"ลัคนา{a['asc_sign_th']} เป็นวิธีที่คุณเข้าหาโลกและรับมือสถานการณ์แรก ๆ แต่แกนสำคัญกว่าคือเจ้าเรือนลัคนา {PLANET_TH[asc_ruler]} อยู่ราศี{asc['sign_th']} เรือน {asc['house']} ({HOUSE_TH[asc['house']-1]}). นี่ทำให้เรื่อง {HOUSE_TOPICS[asc['house']]} เป็นสนามที่ตัวตนของคุณต้องเข้าไปเรียนรู้และตัดสินใจบ่อย คุณภาพดาวอยู่ในสถานะ {asc_dig[0]}: {asc_dig[1]}. เมื่อนำไปอ่านร่วมกับ {sect['name']} และมุมสัมพันธ์ของดาวดวงนี้ จะเห็นว่าคุณไม่ได้มีแค่บุคลิกแบบลัคนา แต่มีแรงขับจากเรื่องเรือน {asc['house']} อยู่เบื้องหลังด้วย")
-    add("02 · โลกภายใน ความรู้สึก และวิธีชาร์จพลัง",f"ดวงจันทร์อยู่ราศี{moon['sign_th']} ซึ่งเป็นธาตุ{ {'Aries':'ไฟ','Leo':'ไฟ','Sagittarius':'ไฟ','Taurus':'ดิน','Virgo':'ดิน','Capricorn':'ดิน','Gemini':'ลม','Libra':'ลม','Aquarius':'ลม','Cancer':'น้ำ','Scorpio':'น้ำ','Pisces':'น้ำ'}[moon['sign']] } และเรือน {moon['house']} ({HOUSE_TH[moon['house']-1]}). อารมณ์จึงผูกกับเรื่อง{HOUSE_TOPICS[moon['house']]}เป็นพิเศษ วิธีเติมพลังที่เข้ากับธาตุนี้คือ { {'ไฟ':'การเคลื่อนไหว ออกกำลัง เต้น หรือทำกิจกรรมที่ได้ปลดปล่อยแรงค้าง','ดิน':'ธรรมชาติ สัมผัสสิ่งของจริง จัดพื้นที่ให้เป็นระเบียบ และกิจวัตรที่มั่นคง','ลม':'อ่านหนังสือ เขียน พูดคุย แลกเปลี่ยนไอเดีย และเรียนสิ่งใหม่','น้ำ':'อยู่ใกล้น้ำ ฟังเพลง เขียนบันทึกอารมณ์ และมีพื้นที่ปลอดภัยให้รู้สึก'}[{'Aries':'ไฟ','Leo':'ไฟ','Sagittarius':'ไฟ','Taurus':'ดิน','Virgo':'ดิน','Capricorn':'ดิน','Gemini':'ลม','Libra':'ลม','Aquarius':'ลม','Cancer':'น้ำ','Scorpio':'น้ำ','Pisces':'น้ำ'}[moon['sign']]] }. อย่าฝืนชาร์จพลังด้วยวิธีที่ไม่ตรงกับความต้องการของตัวเอง")
-    add("03 · ความคิด การสื่อสาร และการตัดสินใจ",f"ดาวพุธอยู่ราศี{pm['Mercury']['sign_th']} เรือน {pm['Mercury']['house']} จึงใช้ความคิดกับเรื่อง{HOUSE_TOPICS[pm['Mercury']['house']]}. เวลาตัดสินใจให้ดูทั้งข้อมูลและแรงกดดันจากเรือนนี้ จุดแข็งคือมีช่องทางเรียนรู้และสื่อสารผ่านเรื่องดังกล่าว ส่วนจุดที่ต้องระวังคือการคิดวนหรือรับข้อมูลมากเกินไปเมื่อเรื่องนั้นยังไม่ชัด")
-    add("04 · ความรัก วิธีรัก และแรงดึงดูด",f"ดาวศุกร์อยู่ราศี{pm['Venus']['sign_th']} เรือน {pm['Venus']['house']} สะท้อนสิ่งที่ทำให้รู้สึกได้รับความรักและวิธีสร้างความกลมกลืน ส่วนดาวอังคารอยู่ราศี{pm['Mars']['sign_th']} เรือน {pm['Mars']['house']} สะท้อนแรงปรารถนา วิธีเข้าหา และการตอบสนองเมื่อไม่พอใจ เรือน 5 อยู่ราศี{rulers[5]['sign_th']} เจ้าเรือนคือ{PLANET_TH[rulers[5]['ruler']]} ไปอยู่เรือน {rulers[5]['ruler_house']} ขณะที่เรือน 7 อยู่ราศี{rulers[7]['sign_th']} เจ้าเรือนคู่ครองคือ{PLANET_TH[rulers[7]['ruler']]} ไปอยู่เรือน {rulers[7]['ruler_house']} ({HOUSE_TH[rulers[7]['ruler_house']-1]}). จึงควรแยกความตื่นเต้นแบบเรือน 5 ออกจากความพร้อมสร้างพันธะระยะยาวแบบเรือน 7 ไม่ควรใช้ Venus เพียงดวงเดียวตัดสินคู่ชีวิต")
+    asc_asp=planet_aspects_for(n,asc_ruler)
+    add("01 · ตัวตนและบุคลิกที่คนอื่นเห็น",f"ถ้าพูดกันตรง ๆ ลัคนา{a['asc_sign_th']} ทำให้ภาพแรกที่คนเห็นเป็นคนที่มีสไตล์แบบนี้ แต่ตัวตนจริง ๆ ของคุณไม่ได้มีแค่นั้น เพราะดาวประจำตัวคือ{PLANET_TH[asc_ruler]} ไปอยู่ราศี{asc['sign_th']} เรือน {asc['house']} เรื่อง{HOUSE_TOPICS[asc['house']]} เลยกลายเป็นธีมที่วนกลับมาให้ตัดสินใจอยู่เรื่อย ๆ ดาวดวงนี้มีสถานะ{asc_dig[0]} และ{evidence_tone(asc_ruler,asc['sign'],asc['house'],asc_asp,sect)} {('มุมที่เด่นคือ ' + ', '.join(x['planet_th']+' '+x['aspect_th']+' '+str(x['orb'])+'°' for x in asc_asp[:3]) + ' ซึ่งทำให้เรื่องนี้มีแรงหนุนหรือแรงกดเข้ามาเกี่ยวข้องชัดขึ้น' ) if asc_asp else 'ดาวประจำตัวไม่มีมุมหลักที่แน่นในเกณฑ์นี้ จึงให้น้ำหนักกับราศี เรือน และ Sect เป็นหลัก'} นี่คือเหตุผลว่าทำไมบางครั้งคนอื่นอาจมองคุณแบบหนึ่ง แต่แรงขับข้างในกลับพาไปอีกทาง")
+    moon_element={'Aries':'ไฟ','Leo':'ไฟ','Sagittarius':'ไฟ','Taurus':'ดิน','Virgo':'ดิน','Capricorn':'ดิน','Gemini':'ลม','Libra':'ลม','Aquarius':'ลม','Cancer':'น้ำ','Scorpio':'น้ำ','Pisces':'น้ำ'}[moon['sign']]
+    moon_selfcare={'ไฟ':'ขยับตัว ออกกำลัง เต้น หรือทำอะไรที่ได้ปล่อยพลัง','ดิน':'อยู่กับธรรมชาติ จัดบ้าน ทำอาหาร หรือทำกิจวัตรที่จับต้องได้','ลม':'อ่าน เขียน คุยกับคนที่คุยรู้เรื่อง หรือเรียนอะไรใหม่','น้ำ':'อยู่เงียบ ๆ ฟังเพลง อยู่ใกล้น้ำ หรือให้เวลาตัวเองได้รู้สึก'}[moon_element]
+    moon_asp=planet_aspects_for(n,'Moon')
+    add("02 · โลกภายใน ความรู้สึก และวิธีชาร์จพลัง",f"ข้างในคุณต้องการความรู้สึกแบบไหนถึงจะโอเค? ดูจากจันทร์ราศี{moon['sign_th']} ธาตุ{moon_element} เรือน {moon['house']} เรื่อง{HOUSE_TOPICS[moon['house']]}. เวลาเรื่องนี้ไม่ลงตัว อารมณ์มักเป็นตัวฟ้องก่อนเหตุผล คุณอาจรู้สึกหมดแรง หงุดหงิด หรืออยากถอยออกมาก่อนจะอธิบายได้ด้วยซ้ำ {evidence_tone('Moon',moon['sign'],moon['house'],moon_asp,sect)} วิธีชาร์จพลังที่เข้ากับดวงจันทร์ดวงนี้คือ{moon_selfcare} ไม่ใช่ฝืนทำตามสูตรของคนอื่น {('มุมที่ต้องจับตาคือ '+', '.join(x['planet_th']+' '+x['aspect_th']+' '+str(x['orb'])+'°' for x in moon_asp[:3])+'.') if moon_asp else 'จันทร์ไม่มีมุมหลักที่แน่นในเกณฑ์ที่ใช้ จึงเน้นอ่านจากราศีและเรือนเป็นหลัก'}")
+    merc=pm['Mercury']; merc_asp=planet_aspects_for(n,'Mercury')
+    add("03 · ความคิด การสื่อสาร และการตัดสินใจ",f"สมองของคุณไปทำงานหนักกับเรื่อง{HOUSE_TOPICS[merc['house']]} เพราะพุธอยู่ราศี{merc['sign_th']} เรือน {merc['house']} จุดนี้ทำให้การพูด การคิด การเรียนรู้ หรือการจัดการข้อมูลมักเป็นเครื่องมือสำคัญเวลาจะเอาตัวรอดหรือสร้างโอกาส {evidence_tone('Mercury',merc['sign'],merc['house'],merc_asp,sect)} {('เวลามีเรื่อง '+', '.join(x['planet_th']+' '+x['aspect_th'] for x in merc_asp[:2])+' เข้ามาเกี่ยวข้อง ให้ระวังการสื่อสารที่รีบเกินไปหรือการตัดสินใจจากข้อมูลไม่ครบ') if merc_asp else 'จุดนี้ไม่ได้มีมุมหลักมาขยายแรงมากเป็นพิเศษ จึงควรดูการใช้ทักษะจริงและสภาพแวดล้อมประกอบ'}")
+    ven=pm['Venus']; mar=pm['Mars']; venasp=planet_aspects_for(n,'Venus'); marasp=planet_aspects_for(n,'Mars')
+    add("04 · ความรัก วิธีรัก และแรงดึงดูด",f"เรื่องรักไม่ได้ดูแค่ว่าคุณชอบคนแบบไหน แต่ดูด้วยว่าคุณต้องการอะไรจากความสัมพันธ์และเวลามีปัญหาคุณตอบสนองยังไง ศุกร์อยู่ราศี{ven['sign_th']} เรือน {ven['house']} ทำให้ความสุขและความรู้สึกถูกรักผูกกับเรื่อง{HOUSE_TOPICS[ven['house']]}; ส่วนอังคารอยู่ราศี{mar['sign_th']} เรือน {mar['house']} บอกวิธีเดินหน้าและวิธีปะทะเมื่อไม่พอใจ {evidence_tone('Venus',ven['sign'],ven['house'],venasp,sect)} ขณะที่อังคารบอกว่าตอนโกรธหรืออยากได้อะไร คุณอาจ{('ตอบสนองค่อนข้างแรงหรือเร็ว' if marasp and any(x['aspect'] in ('Square','Opposition') for x in marasp) else 'เลือกลงมือหรือแสดงออกตามจังหวะของตัวเอง')} เรือน 5 เจ้าเรือน{PLANET_TH[rulers[5]['ruler']]} ไปอยู่เรือน {rulers[5]['ruler_house']} ส่วนเรือน 7 เจ้าเรือน{PLANET_TH[rulers[7]['ruler']]} ไปอยู่เรือน {rulers[7]['ruler_house']} ภาพนี้จึงต้องแยกความหวือหวาตอนเริ่มรักออกจากความพร้อมใช้ชีวิตร่วมกัน")
     add("05 · คู่ครองและบริบทที่อาจพบกัน",f"ลักษณะคู่ที่ดึงดูดอ่านจากราศีเรือน 7 และเจ้าเรือน 7 ไม่ใช่คำบรรยายรูปลักษณ์ตายตัว เจ้าเรือน 7 {PLANET_TH[rulers[7]['ruler']]} อยู่เรือน {rulers[7]['ruler_house']} จึงชี้บริบทที่ความสัมพันธ์อาจเชื่อมโยงกับ{HOUSE_TOPICS[rulers[7]['ruler_house']]}. ตัวอย่างเช่น หากเรือนนี้เกี่ยวกับงาน อาจรู้จักผ่านหน้าที่ ลูกค้า หรือเครือข่ายงาน; หากเกี่ยวกับการเรียนหรือเดินทาง อาจพบผ่านคอร์ส การเดินทาง หรือคนต่างถิ่น ต้องดูดาวร่วมและบริบทจริงก่อนระบุสถานที่เฉพาะ")
-    add("06 · การเงิน: หาเงินจากอะไรและเหนื่อยแค่ไหน",f"เรือน 2 อยู่ราศี{rulers[2]['sign_th']} เจ้าเรือนการเงินคือ{PLANET_TH[rulers[2]['ruler']]} ไปอยู่เรือน {rulers[2]['ruler_house']} ({HOUSE_TH[rulers[2]['ruler_house']-1]}) และมีศักดิ์ {rulers[2]['dignity']}. นี่คือช่องทางหลักที่รายได้และความสามารถในการสร้างทรัพย์เชื่อมไปหาเรื่อง{HOUSE_TOPICS[rulers[2]['ruler_house']]}. เรือน 10 อยู่ราศี{rulers[10]['sign_th']} เจ้าเรือนอาชีพคือ{PLANET_TH[rulers[10]['ruler']]} ไปอยู่เรือน {rulers[10]['ruler_house']} จึงต้องตรวจว่ากลไกอาชีพส่งแรงหนุนหรือเพิ่มภาระให้การเงินอย่างไร")
-    add("07 · เงินเก็บ หนี้ และจุดเงินรั่ว",f"การหาเงินไม่เท่ากับการเก็บเงิน เรือน 8 อยู่ราศี{rulers[8]['sign_th']} เจ้าเรือนคือ{PLANET_TH[rulers[8]['ruler']]} อยู่เรือน {rulers[8]['ruler_house']} ส่วนเรือน 12 อยู่ราศี{rulers[12]['sign_th']} เจ้าเรือนคือ{PLANET_TH[rulers[12]['ruler']]} อยู่เรือน {rulers[12]['ruler_house']}. ใช้สองตำแหน่งนี้ตรวจเรื่องเงินร่วม ภาระ หนี้ ภาษี ค่าใช้จ่ายแฝง และการช่วยเหลือคนอื่น หากเจ้าเรือน 2 เชื่อมกับเจ้าเรือน 8 หรือ 12 ผ่านมุมดาว จะเป็นเหตุผลให้เน้นระบบบัญชี เงินสำรอง และข้อตกลงที่ชัด ไม่ใช่สรุปว่าเป็นหนี้หรือเงินรั่วแน่นอน")
+    money_ruler=rulers[2]['ruler']; money_planet=pm[money_ruler]; money_asp=planet_aspects_for(n,money_ruler)
+    add("06 · การเงิน: หาเงินจากอะไรและเหนื่อยแค่ไหน",f"เรื่องหาเงินของคุณมีจุดเชื่อมกับ{HOUSE_TOPICS[rulers[2]['ruler_house']]}แบบชัด ๆ เพราะเจ้าเรือน 2 คือ{PLANET_TH[money_ruler]} อยู่ราศี{money_planet['sign_th']} เรือน {money_planet['house']} และมีสถานะ{rulers[2]['dignity']} ถ้าจะสร้างรายได้ให้โต ช่องทางที่เข้ากับดวงคือการต่อยอดเรื่องนี้ ไม่ใช่หวังพึ่งโชคอย่างเดียว {evidence_tone(money_ruler,money_planet['sign'],money_planet['house'],money_asp,sect)} ด้านอาชีพ เจ้าเรือน 10 คือ{PLANET_TH[rulers[10]['ruler']]} อยู่เรือน {rulers[10]['ruler_house']} ภาพหาเงินกับภาพงานจึง{('เชื่อมกันผ่านเรื่องเดียวกัน' if rulers[10]['ruler_house']==rulers[2]['ruler_house'] else 'มีคนละสนาม ต้องวางแผนให้สองด้านส่งแรงถึงกัน')} ถ้าต้องการรายได้ที่มั่นคง อย่าปล่อยให้ทักษะที่ทำเงินได้อยู่แค่ในงานประจำหรือช่องทางเดียว")
+    add("07 · เงินเก็บ หนี้ และจุดเงินรั่ว",f"หาเงินเก่งอย่างเดียวไม่พอ ต้องดูด้วยว่าเงินอยู่กับคุณได้นานแค่ไหน เจ้าเรือน 8 คือ{PLANET_TH[rulers[8]['ruler']]} ไปอยู่เรือน {rulers[8]['ruler_house']} ส่วนเจ้าเรือน 12 คือ{PLANET_TH[rulers[12]['ruler']]} ไปอยู่เรือน {rulers[12]['ruler_house']} เรื่องเงินร่วม ภาระ หนี้ ภาษี และค่าใช้จ่ายที่มองไม่เห็นจึงอาจเข้ามาผ่านเรื่อง{HOUSE_TOPICS[rulers[8]['ruler_house']]} และ{HOUSE_TOPICS[rulers[12]['ruler_house']]} {('ที่น่าสนใจคือเจ้าเรือนการเงินไปเชื่อมกับเรือน 8/12 ด้วย จึงควรจริงจังกับสัญญาและเงินสำรองเป็นพิเศษ' if rulers[2]['ruler_house'] in (8,12) else 'ยังไม่มีเหตุผลพอจะฟันธงว่าต้องเป็นหนี้หรือเสียเงินก้อน แต่การแยกบัญชีเงินตัวเองกับเงินร่วมจะช่วยกันปัญหาได้มาก')}")
     f=lots['fortune']; sp=lots['spirit']
     add("08 · Lot of Fortune และ Lot of Spirit",f"Lot of Fortune อยู่ราศี{f['sign_th']} เรือน {f['house']} ({HOUSE_TH[f['house']-1]}) เจ้าเรือนคือ{PLANET_TH[f['ruler']]} ไปอยู่เรือน {f['ruler_position']['house']} และมีศักดิ์ {f['ruler_dignity']}. จุดนี้ใช้ดูเงื่อนไขทางกายภาพ โอกาส ทรัพยากร และสิ่งที่เข้ามาโดยไม่ต้องควบคุมทั้งหมด ส่วน Lot of Spirit อยู่ราศี{sp['sign_th']} เรือน {sp['house']} เจ้าเรือนคือ{PLANET_TH[sp['ruler']]} ไปอยู่เรือน {sp['ruler_position']['house']} ใช้อ่านเจตจำนง การเลือก และทิศทางที่เจ้าชะตาลงมือสร้างด้วยตัวเอง")
     add("09 · งาน อาชีพ และรูปแบบการทำงานประจำวัน",f"เรือน 10 และ MC เป็นคนละข้อมูล: Whole Sign เรือน 10 ใช้อ่านอาชีพและสถานะ ส่วน MC เป็นองศาจริงที่อาจตกเรือนใดก็ได้ MC อยู่ที่ {a['mc']:.2f}° ราศี{SIGN_TH[sign_index(a['mc'])]}. เจ้าเรือน 10 คือ{PLANET_TH[rulers[10]['ruler']]} อยู่เรือน {rulers[10]['ruler_house']}; Mercury อยู่เรือน {pm['Mercury']['house']}, Venus เรือน {pm['Venus']['house']}, Mars เรือน {pm['Mars']['house']} เป็นเครื่องมือด้านคิด-สื่อสาร มนุษยสัมพันธ์ และลงมือแก้ปัญหา ส่วนเรือน 6 อยู่ราศี{rulers[6]['sign_th']} เจ้าเรือนอยู่เรือน {rulers[6]['ruler_house']} จึงบอกสภาพงานประจำวันและความเหน็ดเหนื่อยที่ต้องจัดการ")
@@ -339,7 +391,10 @@ def detailed_natal_reading(n):
     add("11 · บุตร ความสร้างสรรค์ เพื่อน และเครือข่าย",f"เรือน 5 อยู่ราศี{rulers[5]['sign_th']} และเจ้าเรือนอยู่เรือน {rulers[5]['ruler_house']} ใช้อ่านความสุข งานสร้างสรรค์ ความรักแบบโรแมนติก และบุตร ส่วนเรือน 11 อยู่ราศี{rulers[11]['sign_th']} เจ้าเรือนอยู่เรือน {rulers[11]['ruler_house']} ใช้อ่านเพื่อน กลุ่มคน ผู้สนับสนุน และผลตอบแทนจากอาชีพ ควรดูดาวในเรือนและมุมสัมพันธ์ก่อนให้คำตอบเฉพาะเรื่องจำนวนบุตรหรือผลสำเร็จ")
     add("12 · สุขภาพ พลังงาน และข้อควรระวัง",f"ในเชิงโหราศาสตร์ให้ตรวจเรือน 1, 6, 8 และ 12 รวมถึงเจ้าเรือนและดาวที่สัมพันธ์กัน: เรือน 1 เจ้าเรือนอยู่เรือน {rulers[1]['ruler_house']}, เรือน 6 เจ้าเรือนอยู่เรือน {rulers[6]['ruler_house']}, เรือน 12 เจ้าเรือนอยู่เรือน {rulers[12]['ruler_house']}. อ่านเป็นแนวโน้มเรื่องการดูแลตัวเอง ความเครียด และกิจวัตร ไม่ใช่การวินิจฉัยโรคหรือระบุอายุที่จะป่วย หากมีอาการจริงให้ใช้การตรวจทางการแพทย์")
     add("13 · จุดแข็ง จุดท้าทาย และการปรับใช้",f"จุดแข็งควรดูดาวที่มี Essential Dignity, อยู่ใน Sect ที่เหมาะ และได้รับมุมสนับสนุน; จุดท้าทายดูดาวที่เสียศักดิ์ ถูกกดด้วยมุมตึง หรือทำหน้าที่เป็นเจ้าเรือนสำคัญโดยมีเงื่อนไขมาก การแก้เกมคือเปลี่ยนคำอ่านให้เป็นการกระทำ: วางระบบเงินเมื่อเรือน 2/8/12 เชื่อมกัน, ทำขอบเขตความสัมพันธ์เมื่อเรือน 7 ถูกกด, และจัดตารางพักเมื่อเรือน 6/12 เด่น")
-    return {"ascendant":a,"asc_ruler":asc_ruler,"ruler_position":asc,"sect":sect,"ruler_dignity":asc_dig,"story":sections[0]["text"],"sections":sections,"house_rulers":rulers,"lots":lots,"moon_self_care":{"sign":moon['sign'],"sign_th":moon['sign_th'],"house":moon['house'],"house_th":moon['house_th']},"prenatal_syzygy":prenatal_syzygy(n),"planet_details":planet_detail_table(n)}
+    client_name = (client_name or "").strip()
+    for section in sections:
+        section["text"] = addressed(client_name, section["text"])
+    return {"client_name":client_name,"ascendant":a,"asc_ruler":asc_ruler,"ruler_position":asc,"sect":sect,"ruler_dignity":asc_dig,"story":sections[0]["text"],"sections":sections,"house_rulers":rulers,"lots":lots,"moon_self_care":{"sign":moon['sign'],"sign_th":moon['sign_th'],"house":moon['house'],"house_th":moon['house_th']},"prenatal_syzygy":prenatal_syzygy(n),"planet_details":planet_detail_table(n)}
 
 def planet_detail_table(n):
     out=[]
@@ -376,8 +431,8 @@ def health(): return {"ok":True,"engine":"Swiss Ephemeris via Moshier","version"
 @app.post("/api/natal")
 def natal(b:Birth):
   try:
-    n=get_natal(b); s=detailed_natal_reading(n)
-    return {"birth":b.model_dump(),"chart":n,"interpretation":s,"engine_note":"Swiss Ephemeris / Moshier; Tropical Zodiac; Whole Sign Houses; traditional rulers; sect from actual solar altitude."}
+    n=get_natal(b); s=detailed_natal_reading(n,b.name)
+    return {"birth":b.model_dump(),"client_name":b.name,"chart":n,"interpretation":s,"engine_note":"Swiss Ephemeris / Moshier; Tropical Zodiac; Whole Sign Houses; traditional rulers; sect from actual solar altitude."}
   except Exception as e: raise HTTPException(400,f"คำนวณดวงไม่สำเร็จ: {e}")
 
 @app.post("/api/annual")
@@ -406,15 +461,17 @@ def annual(req:AnnualRequest):
     sections=[
       {"title":"ภาพรวมและธีมหลักของปี","text":overview+f" โทนของราศี{sign_th}คือ{SIGN_STYLE[SIGNS[sign_idx]]}. รอบปีนี้นับจากวันเกิด {req.annual_year}-{req.date[5:]} ถึงวันเกิดปีถัดไป ไม่ใช่ปีปฏิทินเต็มปี."},
       {"title":"Lord of the Year — ดาวที่พาเรื่องของปีไปสู่ชีวิตจริง","text":f"{PLANET_TH[ruler]} อยู่ราศี{rd['sign_th']} {rd['degree']:.2f}° เรือน {ruler_house} และ{('กำลังถอยหลัง' if rd['retrograde'] else 'เดินหน้า')}. คุณภาพดาว: {dign}. {dignote}. ดาวนี้แทนเรื่อง{PLANET_MEANING[ruler]}. เมื่อเอามารวมกับเรือน {ruler_house} จะเห็นว่าธีมปีไม่ได้เกิดลอย ๆ แต่ต้องผ่านเรื่อง{ruler_house_topic}. ราศี{rd['sign_th']}ทำให้วิธีรับมือมีโทนว่า{SIGN_STYLE[rd['sign']]}."},
-      {"title":"การงานและทิศทางอาชีพ","text":f"เวลาอ่านงาน เราต้องดูเรือน 10 (อาชีพและสถานะ) ร่วมกับเรือนปี {house_num} และดาวเจ้าเรือนปี {ruler}. ถ้าเรื่องงานปีนี้พัวพันกับ{ruler_house_topic} ตัวอย่างเช่น งานที่ต้องทำสัญญา ประสานเงิน หรือรับผิดชอบเรื่องของคนอื่น ก็อาจกลายเป็นจุดที่ต้องตัดสินใจมากกว่าการเปลี่ยนตำแหน่งอย่างเดียว. ให้ดูดาวเจ้าเรือน 10 และมุมที่ทำกับ {ruler} เพิ่มก่อนสรุปว่าจะเป็นการเลื่อนตำแหน่ง เปลี่ยนงาน หรือเพิ่มภาระ."},
-      {"title":"การเงินและทรัพยากรร่วม","text":f"แยกเงินตัวเองในเรือน 2 ออกจากเงินร่วม หนี้ ภาษี และภาระของอีกฝ่ายในเรือน 8 ก่อน. จุดเชื่อมของปีคือ {PLANET_TH[ruler]} เจ้าเรือนปีไปอยู่เรือน {ruler_house} ({HOUSE_TH[ruler_house-1]}). ถ้าเรือนนี้เกี่ยวข้องกับเรือน 2 หรือ 8 ผ่านเจ้าเรือนหรือมุมดาว เรื่องที่เห็นเป็นรูปธรรมอาจเป็นการจัดงบ แบ่งค่าใช้จ่าย ปรับหนี้ ตรวจสัญญา หรือคุยเรื่องทรัพย์สินร่วม ไม่ควรตีความว่าได้เงินก้อนหรือเสียเงินก้อนโดยไม่มีสัญญาณยืนยัน."},
+      {"title":"การงานและทิศทางอาชีพ","text":f"ปีนี้เรื่องงานมีแนวโน้มเดินผ่านเรื่อง{ruler_house_topic} มากกว่าจะมาแบบลอย ๆ เจ้าเรือนปี {PLANET_TH[ruler]} ไปอยู่เรือน {ruler_house} และเรือน 10 มีเจ้าเรือน {PLANET_TH[TRAD_RULER[(asc_idx+9)%12]]} อยู่เรือน {n['planet_map'][TRAD_RULER[(asc_idx+9)%12]]['house']} ถ้าจังหวะงานขยับ ภาพที่ควรจับตาคือการเปลี่ยนหน้าที่ การรับผิดชอบคนหรือข้อตกลง การใช้ทักษะเฉพาะตัว หรือการต้องตัดสินใจเรื่องเส้นทางอาชีพ {('มีมุมสนับสนุนจาก '+', '.join(x['planet_th']+' '+x['aspect_th'] for x in natal_aspects[:2])+' จึงมีแรงช่วยให้เดินหน้าได้') if natal_aspects else 'ยังไม่มีมุมแน่นจากดาวเจ้าเรือนปีมาช่วยยืนยันการเปลี่ยนแปลงใหญ่ จึงอย่าเพิ่งลาออกหรือเสี่ยงโดยไม่มีแผนรองรับ'}"},
+      {"title":"การเงินและทรัพยากรร่วม","text":f"ปีนี้เงินของคุณต้องดูทั้งรายได้ตัวเองและภาระที่ต้องแชร์กับคนอื่น เจ้าเรือนปี {PLANET_TH[ruler]} อยู่เรือน {ruler_house} เรื่อง{ruler_house_topic} จึงอาจพาให้ต้องจัดระบบเงิน แบ่งค่าใช้จ่าย คุยเรื่องหนี้หรือทรัพย์สินร่วม หรือคิดใหม่ว่ารายได้ทางไหนคุ้มแรงที่สุด {('เพราะเจ้าเรือนปีไปอยู่เรือน 2/8 โดยตรง เรื่องเงินจึงเป็นหนึ่งในธีมที่เด่นจริง' if ruler_house in (2,8) else 'เงินไม่ได้เป็นธีมหลักที่สุดของปี แต่มีโอกาสเข้ามาเป็นเงื่อนไขของการตัดสินใจเรื่องอื่น')}. อย่าเพิ่งนับเงินที่ยังไม่เข้าบัญชี และอย่ารับภาระแทนใครโดยไม่ตกลงให้ชัด"},
       {"title":"ความรัก คู่ครอง และหุ้นส่วน","text":f"เรือน 7 คือคู่ครอง หุ้นส่วน ลูกค้า และข้อตกลง ส่วนเรือน 5 คือความรักแบบโรแมนติก. อ่านสองเรือนนี้ร่วมกับเรือนปี {house_num} และตำแหน่ง {PLANET_TH[ruler]} ในเรือน {ruler_house}. ถ้าความสัมพันธ์จริงจังขึ้น ภาพที่จับต้องได้อาจเป็นการคุยเรื่องเงิน เวลา หน้าที่ หรืออนาคตที่ต้องรับผิดชอบร่วมกัน. ถ้ายังโสด ให้มองเป็นช่วงที่รูปแบบการเลือกคนและขอบเขตความสัมพันธ์ถูกทบทวน ไม่ใช่รับประกันว่าจะมีคู่."},
       {"title":"บ้าน ครอบครัว และชีวิตส่วนตัว","text":f"เรือน 4 หมายถึงบ้าน ครอบครัว และฐานชีวิต. ถ้าเจ้าเรือน 4 เชื่อมกับ Lord of the Year หรือเรือน {ruler_house} เรื่องบ้านอาจเข้ามาเป็นส่วนหนึ่งของการตัดสินใจปีนี้ เช่น วางแผนย้ายบ้าน ซ่อมแซม จัดการทรัพย์สิน หรือแบ่งหน้าที่ดูแลคนในครอบครัว. ต้องตรวจมุมและเจ้าเรือน 4 ก่อนระบุว่าประเด็นใดเด่นจริง."},
       {"title":"สุขภาพ กิจวัตร และพลังงาน","text":f"เรือน 6 ใช้อ่านงานประจำ ภาระ และกิจวัตร ส่วนเรือน 1 ใช้อ่านร่างกายและพลังชีวิต. ถ้าเรือนเหล่านี้เชื่อมกับดาวเจ้าเรือนปี อาจสะท้อนว่าภาระในปีนี้กระทบตารางพักผ่อนหรือการจัดชีวิตประจำวันอย่างไร. นี่เป็นการอ่านเชิงสัญลักษณ์ ไม่ใช่การวินิจฉัยโรค และไม่ใช้แทนคำแนะนำแพทย์."},
       {"title":"มุมสัมพันธ์ของ Lord of the Year","text":("มุมที่พบ: "+"; ".join(f"{x['planet_th']} {x['aspect_th']} orb {x['orb']}°" for x in natal_aspects)) if natal_aspects else "ไม่พบมุมหลักภายใน orb 6° ระหว่าง Lord of the Year กับดาวกำเนิดดวงอื่น จึงไม่ควรแต่งมุมสัมพันธ์เพิ่ม."},
       {"title":"วิธีใช้ปีนี้ให้คุ้ม","text":f"ให้เริ่มจากจัดการเรื่อง{house_topic} แล้วดูว่ามันพาไปแตะเรื่อง{ruler_house_topic}ตรงไหน. ตัวอย่างเช่น ก่อนตกลงเรื่องสำคัญ ให้คุยหน้าที่ เงิน เวลา และเงื่อนไขให้ชัด เก็บหลักฐาน และเผื่อเวลาสำหรับสิ่งที่ต้องค่อย ๆ สร้าง. จุดแข็งของราศี{rd['sign_th']}คือ{SIGN_STYLE[rd['sign']]}."}
     ]
-    return {"year":req.annual_year,"age":age,"profection_house":house_num,"house_th":HOUSE_TH[house_num-1],"sign":SIGNS[sign_idx],"sign_th":sign_th,"sign_glyph":SIGN_GLYPH[sign_idx],"lord_of_year":ruler,"lord_position":rd,"ascendant":n["angles"],"natal_planets":n["planets"],"annual_period":{"start":f"{req.annual_year}-{req.date[5:]}","end":f"{req.annual_year+1}-{req.date[5:]}"},"reading":{"sect":sect["name"],"benefic_of_sect":sect["benefic"],"malefic_of_sect":sect["malefic"],"dignity":dign,"dignity_note":dignote,"aspects":natal_aspects,"sections":sections}}
+    for section in sections:
+      section["text"] = addressed(req.name, section["text"])
+    return {"client_name":req.name,"year":req.annual_year,"age":age,"profection_house":house_num,"house_th":HOUSE_TH[house_num-1],"sign":SIGNS[sign_idx],"sign_th":sign_th,"sign_glyph":SIGN_GLYPH[sign_idx],"lord_of_year":ruler,"lord_position":rd,"ascendant":n["angles"],"natal_planets":n["planets"],"annual_period":{"start":f"{req.annual_year}-{req.date[5:]}","end":f"{req.annual_year+1}-{req.date[5:]}"},"reading":{"sect":sect["name"],"benefic_of_sect":sect["benefic"],"malefic_of_sect":sect["malefic"],"dignity":dign,"dignity_note":dignote,"aspects":natal_aspects,"sections":sections}}
   except Exception as e: raise HTTPException(400,f"คำนวณ Annual Profection ไม่สำเร็จ: {e}")
 
 @app.post("/api/transit")
@@ -440,28 +497,31 @@ def transit(req:TransitRequest):
     # Overall synthesis from the strongest slow-planet contacts.
     top=major[:5]
     if top:
-      overview="ภาพใหญ่ช่วงนี้มีดาวใหญ่เข้ามากระตุ้นพื้นดวงหลายจุด: "+" ".join(f"{x['planet_th']} {x['aspect_th']} {x['natal_th']} (orb {x['orb']}°) ไปแตะเรื่องเรือน {x['natal_planet_house']} และเรื่องที่ดาวดวงนั้นเป็นเจ้าเรือน" for x in top)+". อ่านเป็นธีมที่กำลังทำงานร่วมกัน ไม่ใช่เหตุการณ์แยกขาดจากกัน."
+      overview=(f"{req.name.strip()} ช่วงนี้ไม่ใช่เรื่องเดียวโดด ๆ แต่มีประเด็นที่โยงกันอยู่: " if req.name.strip() else "ช่วงนี้ไม่ใช่เรื่องเดียวโดด ๆ แต่มีประเด็นที่โยงกันอยู่: ")+" ".join(x["story"] for x in top[:3])+" ให้จับตาเรื่องเหล่านี้เป็นพิเศษ โดยเฉพาะมุมที่ใกล้สนิทที่สุด เพราะเป็นจุดที่แรงกดหรือแรงส่งชัดกว่าเรื่องอื่น"
     else:
-      overview="ในวันที่เลือก ยังไม่พบมุมสนิทจากดาวใหญ่ต่อดาวกำเนิดภายใน orb ที่กำหนด จึงให้น้ำหนักกับธีมเรือนที่ดาวใหญ่กำลังเดินผ่านและเหตุการณ์ย้ายราศีในช่วงถัดไป แทนการสร้างคำทำนายเฉพาะเหตุการณ์ขึ้นมาเอง."
-    return {"date":req.transit_date,"transits":list(trans.values()),"aspects":raw[:80],"events":linked[:40],"major_events":major[:20],"overview":overview,"long_term_themes":long_stories,"timeline":ingress,"natal_angles":n["angles"],"natal_planets":n["planet_map"],"sect":sect,"months_scanned":req.months,"engine_note":"ตำแหน่งดาวคำนวณเวลา 12:00 ตามเวลาท้องถิ่น; applying/separating ประเมินจากการเคลื่อนที่วันถัดไป; วันย้ายราศีและ station ค้นด้วย Swiss Ephemeris Moshier โดยสแกนรายวันและหาจุดเปลี่ยนด้วย bisection."}
+      overview=((req.name.strip()+" ในวันที่เลือก ") if req.name.strip() else "ในวันที่เลือก ")+"ยังไม่พบมุมสนิทจากดาวใหญ่ต่อดาวกำเนิดภายใน orb ที่กำหนด จึงให้น้ำหนักกับธีมเรือนที่ดาวใหญ่กำลังเดินผ่านและเหตุการณ์ย้ายราศีในช่วงถัดไป แทนการสร้างคำทำนายเฉพาะเหตุการณ์ขึ้นมาเอง."
+    return {"client_name":req.name,"date":req.transit_date,"transits":list(trans.values()),"aspects":raw[:80],"events":linked[:40],"major_events":major[:20],"overview":overview,"long_term_themes":long_stories,"timeline":ingress,"natal_angles":n["angles"],"natal_planets":n["planet_map"],"sect":sect,"months_scanned":req.months,"engine_note":"ตำแหน่งดาวคำนวณเวลา 12:00 ตามเวลาท้องถิ่น; applying/separating ประเมินจากการเคลื่อนที่วันถัดไป; วันย้ายราศีและ station ค้นด้วย Swiss Ephemeris Moshier โดยสแกนรายวันและหาจุดเปลี่ยนด้วย bisection."}
   except Exception as e: raise HTTPException(400,f"คำนวณ Transit ไม่สำเร็จ: {e}")
 
 @app.post("/api/ask")
 def ask(payload:dict):
   try:
-    b=Birth(**payload["birth"]); question=str(payload.get("question","")).strip()
+    b=Birth(**payload["birth"]); client_name=(b.name or "").strip(); question=str(payload.get("question","")).strip()
     if not question: raise ValueError("กรุณาพิมพ์คำถาม")
-    n=get_natal(b); s=natal_summary(n); q=question.lower()
+    n=get_natal(b); s=detailed_natal_reading(n,client_name); q=question.lower()
     if any(x in q for x in ["งาน","อาชีพ","ธุรกิจ","career","work"]): houses=[6,10,11]; focus="การงานและอาชีพ"
     elif any(x in q for x in ["เงิน","การเงิน","รายได้","ทรัพย์","finance","money"]): houses=[2,8,11]; focus="การเงินและทรัพยากร"
     elif any(x in q for x in ["รัก","คู่","แฟน","ความสัมพันธ์","relationship","love"]): houses=[5,7,8]; focus="ความรักและความสัมพันธ์"
     else: houses=list(range(1,13)); focus="ภาพรวมชีวิต"
-    relevant=[]
+    name_prefix=(client_name+" ") if client_name else ""
+    chosen=[x for x in s["sections"] if any(k in x["title"] for k in ({"การงานและอาชีพ":["งาน อาชีพ"],"การเงินและทรัพยากร":["การเงิน","เงินเก็บ"],"ความรักและความสัมพันธ์":["ความรัก","คู่ครอง"]}.get(focus,[])))]
+    if not chosen: chosen=s["sections"][:5]
+    linked=[]
     for h in houses:
-      si=(n["angles"]["asc_sign_index"]+h-1)%12; ruler=TRAD_RULER[si]; rp=n["planet_map"][ruler]
-      relevant.append(f"เรือน {h} ({HOUSE_TH[h-1]}) อยู่ราศี{SIGN_TH[si]} มี {PLANET_TH[ruler]} เป็นเจ้าเรือน และดาวไปอยู่เรือน {rp['house']} ({HOUSE_TH[rp['house']-1]}). จึงต้องอ่านเรื่อง{HOUSE_TOPICS[h]}ควบคู่กับเรื่อง{HOUSE_TOPICS[rp['house']]}")
-    answer=f"ขอเริ่มจากโครงสร้างดวงก่อนนะ หัวข้อที่ถามคือ{focus}. {s['story']}\n\nจุดที่เกี่ยวข้องในพื้นดวง:\n"+"\n".join(relevant)+"\n\nนี่คือการเชื่อมโครงสร้างพื้นดวง ยังไม่ใช่การระบุเหตุการณ์ตามวันเวลา เพราะต้องนำดาวจรของช่วงที่ถามมาซ้อนอีกชั้น ถ้าระบุช่วงเวลาได้ ระบบ Transit จะใช้หามุมดาวและช่วงเวลาที่เข้มข้นประกอบ."
-    return {"question":question,"answer":answer,"facts":{"natal":s,"relevant_houses":houses}}
+      r=s["house_rulers"][h]
+      linked.append(f"เรื่อง{HOUSE_TOPICS[h]}ไปเชื่อมกับ{HOUSE_TOPICS[r['ruler_house']]} ผ่านดาว{r['ruler_th']}ที่ไปอยู่เรือน {r['ruler_house']}")
+    answer=(f"{name_prefix}ถ้าถามเรื่อง{focus} ฉันจะสรุปให้ตรง ๆ แบบนี้นะ\n\n"+"\n\n".join(x["text"] for x in chosen)+"\n\n"+" อีกจุดที่ทำให้เรื่องนี้ไม่แยกขาดจากชีวิตด้านอื่นคือ "+"; ".join(linked)+". นี่คือภาพพื้นดวงว่ามีแนวโน้มและจุดแข็งจุดอ่อนแบบไหน ถ้าต้องการฟันธงเป็นช่วงเดือนหรือวัน ต้องระบุช่วงเวลาที่สนใจแล้วซ้อน Transit กับ Annual Profection อีกชั้น ไม่ควรเดาวันจากพื้นดวงอย่างเดียว")
+    return {"client_name":client_name,"question":question,"answer":answer,"facts":{"natal":s,"relevant_houses":houses}}
   except Exception as e: raise HTTPException(400,f"ประมวลผลคำถามไม่สำเร็จ: {e}")
 
 app.mount("/static",StaticFiles(directory=ROOT),name="static")
