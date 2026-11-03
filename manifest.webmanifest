@@ -1,0 +1,17 @@
+{
+  "name": "ROTA — Personal Astrology",
+  "short_name": "ROTA",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111925",
+  "theme_color": "#151d2a",
+  "icons": [
+    {
+      "src": "/static/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
