@@ -1,230 +1,249 @@
-import streamlit as st
-from datetime import datetime
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+from datetime import datetime, date, timedelta
+import swisseph as swe
+from pathlib import Path
+
+ROOT = Path(__file__).parent
+app = FastAPI(title="ROTA Personal Astrology - Friend Mode", version="3.2.0")
 
 # -----------------------------------------------------------------------------
-# 1. Page Configuration & Styling
+# 1. ASTROLOGICAL DATA & MAPS
 # -----------------------------------------------------------------------------
-st.set_page_config(
-    page_title="App ดูดวงฉบับเพื่อนสาวสายมู 🔮",
-    page_icon="🔮",
-    layout="wide"
-)
+PLANETS = [
+    ("Sun", swe.SUN, "อาทิตย์", "☉"), ("Moon", swe.MOON, "จันทร์", "☽"),
+    ("Mercury", swe.MERCURY, "พุธ", "☿"), ("Venus", swe.VENUS, "ศุกร์", "♀"),
+    ("Mars", swe.MARS, "อังคาร", "♂"), ("Jupiter", swe.JUPITER, "พฤหัสบดี", "♃"),
+    ("Saturn", swe.SATURN, "เสาร์", "♄"), ("Uranus", swe.URANUS, "ยูเรนัส", "♅"),
+    ("Neptune", swe.NEPTUNE, "เนปจูน", "♆"), ("Pluto", swe.PLUTO, "พลูโต", "♇"),
+]
+PLANET_IDS = {p[0]: p[1] for p in PLANETS}
+PLANET_TH = {p[0]: p[2] for p in PLANETS}
+SIGNS = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
+SIGN_TH = ["เมษ","พฤษภ","เมถุน","กรกฎ","สิงห์","กันย์","ตุล","พิจิก","ธนู","มังกร","กุมภ์","มีน"]
+TRAD_RULER = ["Mars","Venus","Mercury","Moon","Sun","Mercury","Venus","Mars","Jupiter","Saturn","Saturn","Jupiter"]
+HOUSE_TH = ["ตนุ","กดุมภะ","สหัชชะ","พันธุ","ปุตตะ","อริ","ปัตนิ","มรณะ","ศุภะ","กัมมะ","ลาภะ","วินาศ"]
 
-# ตกแต่ง CSS ให้ดูสดใส เป็นกันเอง
-st.markdown("""
-    <style>
-    .main-title {
-        font-size: 2.2rem;
-        color: #6C5CE7;
-        text-align: center;
-        font-weight: bold;
-        margin-bottom: 0.5rem;
-    }
-    .sub-title {
-        font-size: 1.1rem;
-        text-align: center;
-        color: #636E72;
-        margin-bottom: 2rem;
-    }
-    .card {
-        background-color: #F9F7FE;
-        padding: 1.5rem;
-        border-radius: 12px;
-        border-left: 5px solid #A29BFE;
-        margin-bottom: 1rem;
-    }
-    .warning-box {
-        background-color: #FFF0F0;
-        padding: 1rem;
-        border-radius: 10px;
-        border-left: 5px solid #FF7675;
-    }
-    .good-box {
-        background-color: #E8F8F5;
-        padding: 1rem;
-        border-radius: 10px;
-        border-left: 5px solid #00B894;
-    }
-    </style>
-""", unsafe_allow_html=True)
+HOUSE_TOPICS = {
+  1:"ตัวตน ลุคภายนอก ภาพจำ และพลังงานตัวเอง", 2:"เงินกระเป๋าเรา การหาเงิน ค่านิยม ของเปย์ตัวเอง",
+  3:"เพื่อนสนิท คอนเนกชัน คอร์สสั้น การเดินทางใกล้ๆ สื่อสาร", 4:"บ้าน ครอบครัว เซฟโซน ที่อยู่อาศัย",
+  5:"ความรักกุ๊กกิ๊ก ความสุข ไฟโปรเจกต์ใหม่ ของเล่น/สัตว์เลี้ยง", 6:"งานประจำ รูทีนชีวิต สุขภาพ ออฟฟิศซินโดรม",
+  7:"คู่แท้ หุ้นส่วน แฟน สายเปย์คู่สัญญา", 8:"เงินคนอื่น หนี้สิน สัญญา ทรัพย์สินร่วม การเยียวยาจิตใจ",
+  9:"ต่างประเทศ การเรียนต่อ โลกทัศน์ สายมู/ความเชื่อ", 10:"งานใหญ่ อาชีพ ชื่อเสียง ตำแหน่ง และเป้าหมายชีวิต",
+  11:"เพื่อนกลุ่มใหญ่ คอนเนกชันปังๆ ความฝัน ลาภลอย", 12:"เรื่องเบื้องหลัง พักชาร์จแบต เซนส์ สิ่งที่มองไม่เห็น"
+}
 
-# Header
-st.markdown('<div class="main-title">🔮 แอปอ่านดวง Mental Horoscope 🔮</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">แกะรหัสชีวิตแบบละเอียด แต่คุยกันเหมือนเพื่อนจิบกาแฟเม้าท์มอย ✨</div>', unsafe_allow_html=True)
+ASPECTS = [(0,"Conjunction","กุม (พลังรวมกันแรงมาก)"),(60,"Sextile","โยค (ส่งพลังสนับสนุนกันดี)"),(90,"Square","ฉาก (ตึงเครียด ต้องแก้ปัญหา)"),(120,"Trine","ตรีโกณ (ไหลลื่น โชคช่วย)"),(180,"Opposition","เล็ง (ดึงกันคนละทาง ต้องจัดสมดุล)")]
+FLAGS = swe.FLG_MOSEPH | swe.FLG_SPEED
+SLOW_PLANETS = ["Jupiter","Saturn","Uranus","Neptune","Pluto"]
 
 # -----------------------------------------------------------------------------
-# 2. Sidebar Input Data
+# 2. HELPER FUNCTIONS & CALCULATIONS
 # -----------------------------------------------------------------------------
-st.sidebar.header("📌 กรอกข้อมูลวันเกิดเพื่อน")
-name = st.sidebar.text_input("ชื่อ/ชื่อเล่น", "แกนั่นแหละ")
-birth_date = st.sidebar.date_input("วันเกิด", datetime(2000, 1, 1))
-birth_time = st.sidebar.time_input("เวลาเกิด (สำคัญมาก)", datetime.now().time())
-birth_place = st.sidebar.text_input("จังหวัดที่เกิด", "กรุงเทพฯ")
-current_age = st.sidebar.number_input("อายุปัจจุบัน (ปี)", min_value=1, max_value=120, value=25)
+class Birth(BaseModel):
+    name: str = "แก"
+    date: str
+    time: str
+    place: str = "Bangkok, Thailand"
+    lat: float = Field(13.7563, ge=-90, le=90)
+    lon: float = Field(100.5018, ge=-180, le=180)
+    tz: float = Field(7.0, ge=-12, le=14)
 
-st.sidebar.markdown("---")
-mode = st.sidebar.radio(
-    "🎯 เลือกโหมดเม้าท์ดวง:",
-    ["1. ผ่าแก่นตัวตน (Birth Chart)", "2. ดาวจรเช็กดวงรายเดือน (Transit)", "3. ดวงรายปีปลดล็อก (Annual Profection)"]
-)
+class TransitRequest(Birth):
+    transit_date: str
+    months: int = Field(12, ge=1, le=24)
 
-# -----------------------------------------------------------------------------
-# 3. Mode 1: Birth Chart Reading
-# -----------------------------------------------------------------------------
-if mode == "1. ผ่าแก่นตัวตน (Birth Chart)":
-    st.subheader(f"🧩 เจาะลึกผ่าแก่นตัวตนของ: {name}")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        <div class="card">
-            <h3>🧠 Mental & Inner Self (ตัวตนและภาพรวมความคิด)</h3>
-            <p><b>ลัคนา / อาทิตย์:</b> แกเป็นพวกภายนอกดูนิ่งๆ เหมือนเข้าถึงยาก แต่ข้างในคือคิดตลอดเวลา! สมองไม่เคยหยุดหมุน ชอบวางแผน 3-4 สเต็ปไปข้างหน้า เหมือนคนเล่นหมากรุกตลอดเวลา</p>
-            <p><b>เวลารัก:</b> เป็นพวกปากแข็งแต่สายเปย์! ไม่ค่อยพูดหวานๆ หรอก แต่ถ้าแกชอบใคร แกจะจำได้หมดเลยว่าเขาชอบกินอะไร แพ้อะไร คอยซัพพอร์ตอยู่หลังบ้านแบบเงียบๆ</p>
-            <p><b>เวลาโกรธ:</b> แกไม่ได้โกรธแบบโวยวายบ้านแตก แต่เป็นสาย <i>'Silent Treatment'</i> หรือพูดคำเดียวแต่จุกไปสามวัน รังสีความเย็นชาออกจนคนรอบข้างต้องร้องขอชีวิต</p>
-        </div>
-        """, unsafe_allow_html=True)
+class AnnualRequest(Birth):
+    annual_year: int = Field(..., ge=1900, le=2200)
 
-        st.markdown("""
-        <div class="card">
-            <h3>🏠 ครอบครัว & เซฟโซน</h3>
-            <p><b>พื้นดวงครอบครัว:</b> ผูกพันนะ แต่บางทีก็รู้สึกอึดอัด เหมือนมีคาดหวังกันลึกๆ บ้านคือสถานที่ๆ แกอยากพัก แต่บางทีพักแล้วเครียดกว่าเดิม เพราะแกมักจะต้องสวมบทเป็นคนจัดการหรือคนที่เสียสละในบ้านเสมอ</p>
-        </div>
-        """, unsafe_allow_html=True)
+def jd_for(local_date, local_time="12:00", tz=7.0):
+    dt = datetime.fromisoformat(f"{local_date}T{local_time}:00")
+    utc = dt - timedelta(hours=tz)
+    return swe.julday(utc.year, utc.month, utc.day, utc.hour + utc.minute/60 + utc.second/3600, swe.GREG_CAL)
 
-    with col2:
-        st.markdown("""
-        <div class="card">
-            <h3>💰 พื้นดวงการเงินตลอดชีวิต</h3>
-            <p><b>สไตล์การเงิน:</b> แกเป็นพวก 'หาได้เยอะ แต่ก็จ่ายเก่งตามอารมณ์' มักจะมีเงินเข้ามาเรื่อยๆ ไม่เคยอดตาย แต่อดมโนซื้อของตามใจไม่ได้! เงินมักไหลออกไปกับงานอดิเรก ความสุขส่วนตัว หรือการเปย์เพื่อนและคนที่รัก</p>
-            <p><b>จุดสปอยล์:</b> อย่าหาทำเรื่องกู้ร่วมกับใคร หรือเซ็นค้ำประกันเด็ดขาด เพราะดวงแกมักจะโดนเกรงใจจนเสียเงินฟรี!</p>
-        </div>
-        """, unsafe_allow_html=True)
+def wrapdiff(a,b): return abs((a-b+180)%360-180)
+def sign_index(lon): return int((lon%360)//30)
+def house_of(lon, asc_sign_idx): return ((sign_index(lon)-asc_sign_idx)%12)+1
 
-        st.markdown("""
-        <div class="card">
-            <h3>💼 พื้นดวงการงานตลอดชีวิต</h3>
-            <p><b>สไตล์การทำงาน:</b> แกเหมาะกับการทำงานที่ใช้สมองและอิสรภาพ ทำงานเช้าชามเย็นชามจะไม่ค่อยโต ต้องเป็นงานที่ได้แก้ปัญหา หรือใช้ทักษะเฉพาะตัว แกถึงจะปล่อยของได้เต็มที่</p>
-            <p><b>ศัตรูในที่ทำงาน:</b> มักเป็นพวก 'ความริษยาเงียบ' เพราะเวลาแกตั้งใจทำอะไร งานแกเด่นเกินหน้าคนอื่นจนเขาเขม่น ไม่ต้องสนใจ ทำตัวสวยๆ รวยๆ เดินผ่านพอ!</p>
-        </div>
-        """, unsafe_allow_html=True)
+def planet_positions(jd):
+    out={}
+    for en,pid,th,glyph in PLANETS:
+        xx,_=swe.calc_ut(jd,pid,FLAGS)
+        lon,speed=xx[0],xx[3]
+        si=sign_index(lon); deg=lon%30
+        out[en]={"name":en,"thai":th,"glyph":glyph,"longitude":round(lon%360,6),"sign":SIGNS[si],"sign_th":SIGN_TH[si],"degree":round(deg,2),"retrograde":speed<0}
+    return out
+
+def house_data(jd,lat,lon):
+    _,ascmc=swe.houses_ex(jd,lat,lon,b'W')
+    asc=ascmc[0]%360; ai=sign_index(asc)
+    return {"asc":asc,"asc_sign":SIGNS[ai],"asc_sign_th":SIGN_TH[ai],"asc_sign_index":ai}
+
+def get_natal(b):
+    jd=jd_for(b.date,b.time,b.tz)
+    planets=planet_positions(jd)
+    angles=house_data(jd,b.lat,b.lon)
+    ai=angles["asc_sign_index"]
+    for p in planets.values():
+        p["house"]=house_of(p["longitude"],ai)
+        p["house_th"]=HOUSE_TH[p["house"]-1]
+    return {"julian_day":jd,"planets":planets,"angles":angles}
 
 # -----------------------------------------------------------------------------
-# 4. Mode 2: Transits Reading
+# 3. FRIENDLY NARRATIVE GENERATOR (ภาษาเพื่อน เม้าท์มอย เข้าใจง่าย)
 # -----------------------------------------------------------------------------
-elif mode == "2. ดาวจรเช็กดวงรายเดือน (Transit)":
-    st.subheader(f"🪐 ดาวจรเดือนนี้ส่งผลยังไงกับ {name} บ้าง?")
-    
-    selected_month = st.select_slider(
-        "เลือกเดือนที่ต้องการเช็ก:",
-        options=["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
-    )
-    
-    st.info(f"📅 อัปเดตดาวจรประจำเดือน: **{selected_month}**")
-    
-    st.markdown("### 🌟 ดาวใหญ่ที่กำลังย้าย/ส่งผลแรงช่วงนี้")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        <div class="card">
-            <h4>🪐 ดาวเสาร์ (Saturn) - บททดสอบความอดทน</h4>
-            <p><b>อยู่นานแค่ไหน:</b> ส่งผลยาวๆ 2.5 ปี (ตอนนี้เข้าสู่ช่วงปีที่ 2)</p>
-            <p><b>เอฟเฟกต์:</b> เหมือนโดนผู้ใหญ่ขี้บ่นยืนจ้องหน้า ทำอะไรก็ดูช้าไปหมด รู้สึกเหนื่อยกับภาระหน้าที่</p>
-            <p><b>เหตุการณ์ที่จะเกิด:</b> โดนโยนงานใหญ่หินๆ มาให้ทำ หรือต้องแบกรับปัญหาของคนอื่น แต่มันจะทำให้แกเก่งขึ้นแบบกระโดด!</p>
-        </div>
-        """, unsafe_allow_html=True)
+def get_friendly_name(name):
+    name = (name or "").strip()
+    return name if name and name != "แก" else "แก"
 
-        st.markdown("""
-        <div class="good-box">
-            <h4>🎉 เรื่องดีๆ ที่กำลังจะเกิดขึ้น!</h4>
-            <ul>
-                <li>ดาวพฤหัสบดีให้โชค! จะมีโอกาสเรื่องงานใหม่ๆ หรือได้เงินก้อนแบบไม่คาดฝัน</li>
-                <li>มีผู้ใหญ่ใจดีหรือคอนเนกชันปังๆ ยื่นมือเข้ามาช่วยเหลือ</li>
-                <li>ถ้าโสด: มีเกณฑ์เจอคนโปรไฟล์ดี ท่าทางอบอุ่นเข้ามาคุย</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
+def build_natal_friendly_reading(n, client_name=""):
+    fname = get_friendly_name(client_name)
+    pm = n["planets"]
+    ai = n["angles"]["asc_sign_index"]
+    
+    asc_sign = n["angles"]["asc_sign_th"]
+    asc_ruler_en = TRAD_RULER[ai]
+    asc_ruler = pm[asc_ruler_en]
+    
+    sun = pm["Sun"]
+    moon = pm["Moon"]
+    merc = pm["Mercury"]
+    ven = pm["Venus"]
+    mar = pm["Mars"]
+    jup = pm["Jupiter"]
+    sat = pm["Saturn"]
 
-    with col2:
-        st.markdown("""
-        <div class="card">
-            <h4>🔥 ดาวอังคาร (Mars) - ตัวเร่งไฟและอารมณ์</h4>
-            <p><b>อยู่นานแค่ไหน:</b> ส่งผลประมาณ 6-8 สัปดาห์</p>
-            <p><b>เอฟเฟกต์:</b> ใจร้อนเป็นไฟพร้อมบวก! พร้อมฟาดทุกคนที่เดินช้าขวางทาง</p>
-            <p><b>เหตุการณ์ที่จะเกิด:</b> มีเรื่องด่วนงานด่วนเข้ามาให้แก้ปวดหัว รถติด งานแทรก ความดันขึ้น!</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("""
-        <div class="warning-box">
-            <h4>⚠️ เรื่องที่ต้องระมัดระวังเป็นพิเศษ!</h4>
-            <ul>
-                <li><b>ปากไวใจเร็ว:</b> ระวังระเบิดอารมณ์ใส่คนใกล้ตัวแล้วมานั่งเสียใจทีหลัง</li>
-                <li><b>สุขภาพ:</b> ระวังนอนไม่หลับ ปวดหัว หรือมีอาการออฟฟิศซินโดรมกำเริบ</li>
-                <li><b>การเงิน:</b> อย่าเพิ่งกด CF ของราคาแพงตามอารมณ์ชั่ววูบ ยามนี้ถือเงินสดไว้ก่อนดีสุด</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
+    sections = [
+        {
+            "title": "🧠 1. ตัวตน & Vibe ที่คนอื่นเห็น (Mental & Outer Vibe)",
+            "text": f"ลัคนา{asc_sign} ทำให้เวลาคนเห็น {fname} ครั้งแรก จะรู้สึกว่าแกมีออร่าแบบนี้! แต่ตัวจริงข้างในคือนำพาด้วยดาว{asc_ruler['thai']} ที่ไปสถิตอยู่เรือน {asc_ruler['house']} ({asc_ruler['house_th']}). แปลว่าหัวใจหลักของแกในชีวิตนี้จะวนเวียนอยู่กับเรื่อง **{HOUSE_TOPICS[asc_ruler['house']]}** แกไม่ใช่คนตื้นเขิน คิดอะไรซับซ้อนกว่าที่คนอื่นเห็นเสมอ!"
+        },
+        {
+            "title": "💖 2. โลกภายใน อารมณ์ & วิธีฮีลใจเวลาเครียด",
+            "text": f"จันทร์สถิตราศี{moon['sign_th']} เรือน {moon['house']}. ข้างใน {fname} เป็นคนที่เรื่องอารมณ์ผูกกับความรู้สึกปลอดภัยในเรื่อง **{HOUSE_TOPICS[moon['house']]}** มากๆ เวลาเหนื่อยหรือนอยด์ แกอย่าฝืนไปสังสรรค์ตามคนอื่น ให้กลับมาชาร์จพลังในพื้นที่ส่วนตัว ดื่มน้ำ ทำจิตใจให้นิ่ง หรือโฟกัสกับสิ่งที่ควบคุมได้ แล้วพลังแกจะกลับมาเร็วมาก"
+        },
+        {
+            "title": "🗣️ 3. สไตล์การคิด การพูด & การตัดสินใจ",
+            "text": f"พุธอยู่ราศี{merc['sign_th']} เรือน {merc['house']}. เรื่องสมองไบร์ทและความคิด {fname} จะถนัดมากเป็นพิเศษในประเด็น **{HOUSE_TOPICS[merc['house']]}** เวลาเจรจาหรือติดต่อเรื่องนี้ แกจะมีไหวพริบดี พูดแป๊บเดียวคนก็เคลิ้มตาม แต่ข้อควรระวังคือ เวลาโกรธอย่าเพิ่งพิมพ์หรือพูดทันที ให้ถอยออกมา 5 นาที ไม่งั้นคำพูดแกจะแทงใจคนฟังจุกไปสามวัน!"
+        },
+        {
+            "title": "🥰 4. เวลารักใครเป็นยังไง & สเปกที่แพ้ทาง",
+            "text": f"ศุกร์อยู่ราศี{ven['sign_th']} เรือน {ven['house']} และอังคารอยู่เรือน {mar['house']}. เวลารักใคร {fname} จะแสดงออกผ่านเรื่อง **{HOUSE_TOPICS[ven['house']]}** ไม่ใช่แค่พูดหวานๆ แต่ชอบซัพพอร์ตให้เห็นเป็นรูปธรรม! ส่วนสเปกที่เห็นแล้วใจสั่น มักจะเป็นคนที่ดูมีความรับผิดชอบ ชัดเจน และเข้ามาร่วมแชร์เรื่อง **{HOUSE_TOPICS[mar['house']]}** ในชีวิตแกได้"
+        },
+        {
+            "title": "💰 5. พื้นดวงการเงินตลอดชีวิต & จุดเงินรั่ว",
+            "text": f"เรื่องเงินของ {fname} วนเวียนกับเรื่อง **{HOUSE_TOPICS[pm[TRAD_RULER[(ai+1)%12]]['house']]}**. แกเป็นพวกหาเงินเก่ง มีช่องทางหาเงินเข้ามาเรื่อยๆ ไม่ขัดสน แต่จุดที่ต้องระวังคือ 'เงินรั่วตามอารมณ์'! เวลาเครียดหรืออยากเปย์รางวัลให้ตัวเอง เงินจะไหลออกไวมาก เทคนิคคือ ได้เงินมาให้แยกบัญชีเก็บทันที อย่าแช่ไว้ในบัญชีพร้อมใช้"
+        },
+        {
+            "title": "💼 6. การงาน อาชีพ & ศัตรูในที่ทำงาน",
+            "text": f"ดาวการงานของแกตกเรือน {pm[TRAD_RULER[(ai+9)%12]]['house']}. งานที่ทำแล้วปังต้องเป็นงานที่ได้ใช้ศักยภาพในเรื่อง **{HOUSE_TOPICS[pm[TRAD_RULER[(ai+9)%12]]['house']]}** แกเหมาะกับการทำงานที่มีอิสระระดับนึง ไม่ชอบโดนจู้จี้จุกจิก ส่วนเรื่องศัตรูในที่ทำงาน มักมาในรูปแบบคนอิจฉาเงียบๆ เวลาแกทำผลงานเด่น วิธีรับมือคือ ไม่ต้องไปแลก ทำตัวสวยๆ รวยๆ เดินผ่านพอ!"
+        }
+    ]
+    return sections
 
 # -----------------------------------------------------------------------------
-# 5. Mode 3: Annual Profection
+# 4. API ENDPOINTS
 # -----------------------------------------------------------------------------
-else:
-    st.subheader(f"📅 เช็กดวงรายปี (Annual Profection) - อายุ {current_age} ปี")
-    
-    # คำนวณเรือน Profection แบบง่าย (House = (Age % 12) + 1)
-    house_num = (current_age % 12) + 1
-    
-    # พจนานุกรมความหมายเรือนฉบับภาษาเพื่อน
-    house_details = {
-        1: ("เรือนที่ 1 (ตนุ)", "ตัวตน สุขภาพ การเริ่มต้นใหม่", "ปีนี้แกคือพระเอก/นางเอกของเรื่อง! โฟกัสตัวเอง ปรับลุคใหม่ เปลี่ยนงาน เปลี่ยนชีวิต"),
-        2: ("เรือนที่ 2 (ทนัง)", "การเงิน ทรัพย์สิน สิ่งที่ครอบครอง", "ปีแห่งการปั๊มเงิน! โฟกัสเรื่องวิธีหาเงินใหม่ๆ การลงทุน และการจัดการหนี้สิน"),
-        3: ("เรือนที่ 3 (สหัชชะ)", "เพื่อน การเดินทางใกล้ๆ การสื่อสาร", "ปีแห่งการเดินทาง วิ่งรอก สังคมใหม่ๆ การทำคอนเทนต์ หรือลงเรียนคอร์สสั้นๆ"),
-        4: ("เรือนที่ 4 (พันธุ)", "บ้าน ครอบครัว อสังหาฯ รากฐานชีวิต", "โฟกัสเรื่องบ้าน การแต่งห้อง ซื้อรถ หรือจัดการเรื่องในครอบครัว ย้ายที่อยู่"),
-        5: ("เรือนที่ 5 (ปุตตะ)", "ความสุข โปรเจกต์ใหม่ ความรักวัยรุ่น ลูกน้อง", "ปีแห่งความสนุก! ได้ทำโปรเจกต์สนุกๆ มีไฟแพชชัน มีเกณฑ์มีลูก/เลี้ยงสัตว์ หรือเจอน้องๆ เด็กกว่าเข้ามาจีบ"),
-        6: ("เรือนที่ 6 (อริ)", "งานหนัก สุขภาพ ปัญหาที่ต้องแก้ รูทีนชีวิต", "ปีแห่งการแก้ปัญหาและลุยงาน! ปรับรูทีนสุขภาพ ระวังป่วยเพราะงานหนัก แต่ผ่านไปได้จะถึกทนมาก"),
-        7: ("เรือนที่ 7 (ปัตนิ)", "ความรัก หุ้นส่วน สัญญา คู่สัญญา", "ปีแห่งความสัมพันธ์! เรื่องความรักเด่นมาก หรือการจับมือทำธุรกิจกับคนอื่น"),
-        8: ("เรือนที่ 8 (มรณะ)", "เงินคนอื่น การแปลงสภาพ การเยียวยาจิตใจ", "ปีแห่งการเคลียร์ของเก่า ปล่อยวาง ปรับมุมมองชีวิต รับมรดก หรือการจัดการเรื่องภาษี/ประกัน"),
-        9: ("เรือนที่ 9 (ศุภะ)", "การเติบโต การเรียนต่อ ต่างประเทศ ความเชื่อ", "ปีแห่งการเปิดโลก! บินต่างประเทศ เรียนต่อ ปริญญาโท หรือค้นพบปรัชญาชีวิตใหม่ๆ"),
-        10: ("เรือนที่ 10 (กัมมะ)", "การงาน ชื่อเสียง เป้าหมายชีวิต", "ปีแห่งการพุ่งทะยานเรื่องงาน! ได้เลื่อนตำแหน่ง โดนดันขึ้นเป็นผู้นำ มีชื่อเสียง"),
-        11: ("เรือนที่ 11 (ลาภะ)", "โชคลาภ ความฝัน สังคมกว้างๆ คอนเนกชัน", "ปีแห่งความปังและความโชคดี! ได้โชคจากเพื่อนฝูง ทำอะไรก็มีคนคอยสนับสนุน ความฝันเป็นจริง"),
-        12: ("เรือนที่ 12 (วินาศ)", "เรื่องเบื้องหลัง การพักผ่อน สมาธิ สิ่งที่มองไม่เห็น", "ปีแห่งการพักชาร์จแบต ทำงานเบื้องหลัง ซุ่มทำโปรเจกต์ลับๆ และการปล่อยวางความเครียด")
-    }
-    
-    title, theme, detail = house_details[house_num]
-    
-    st.markdown(f"""
-    <div class="card" style="border-left: 5px solid #FF9FF3;">
-        <h2>✨ ปีนี้เรือนที่แอคทีฟคือ: {title}</h2>
-        <h4><b>ธีมหลักประจำช่วงอายุ {current_age} ปี:</b> {theme}</h4>
-        <p style="font-size: 1.1rem; line-height: 1.6;">{detail}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("### 🎯 สิ่งที่แกต้องโฟกัส & ดาวจรเข้ากระทบปีนี้")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(f"""
-        <div class="good-box">
-            📌 <b>สิ่งที่ต้องโฟกัสเป็นหลัก:</b>
-            <p>เอาพลังงาน 80% ของปีนี้ไปทุ่มให้เรื่อง <b>{theme}</b> แล้วชีวิตจะเดินหน้าไวมาก ไม่ต้องไปโฟกัสเรื่องอื่นให้เสียเวลา</p>
-        </div>
-        """, unsafe_allow_html=True)
+@app.get("/")
+def index(): 
+    if (ROOT/"index.html").exists():
+        return HTMLResponse((ROOT/"index.html").read_text(encoding="utf-8"))
+    return {"message": "ROTA Astrology API Ready!"}
+
+@app.get("/api/health")
+def health(): 
+    return {"ok": True, "engine": "Swiss Ephemeris", "mode": "Friend Conversational"}
+
+@app.post("/api/natal")
+def natal(b: Birth):
+    try:
+        n = get_natal(b)
+        sections = build_natal_friendly_reading(n, b.name)
+        return {
+            "client_name": b.name,
+            "chart_info": {
+                "asc_sign": n["angles"]["asc_sign_th"],
+                "sun_sign": n["planets"]["Sun"]["sign_th"],
+                "moon_sign": n["planets"]["Moon"]["sign_th"]
+            },
+            "sections": sections
+        }
+    except Exception as e: 
+        raise HTTPException(400, f"คำนวณดวงไม่สำเร็จ: {e}")
+
+@app.post("/api/annual")
+def annual(req: AnnualRequest):
+    try:
+        n = get_natal(req)
+        fname = get_friendly_name(req.name)
+        birth_year = int(req.date[:4])
+        age = req.annual_year - birth_year
+        if age < 0: raise ValueError("ปีที่เลือกอยู่ก่อนปีเกิดนะแก")
         
-    with col2:
-        st.markdown("""
-        <div class="card">
-            🪐 <b>ทรานสิตเสริมปีนี้:</b>
-            <p>ดูว่าดาวเจ้าเรือนนี้วิ่งไปอยู่ที่ไหนในดวงจร เช่น ถ้าเรือนการเงินแอคทีฟ แล้วดาวจรวิ่งเข้าเรือนการงาน = ปีนี้ขยันทำงานแล้วเงินจะทะลักเข้ากระเป๋าตังค์แบบปังๆ!</p>
-        </div>
-        """, unsafe_allow_html=True)
+        house_num = (age % 12) + 1
+        asc_idx = n["angles"]["asc_sign_index"]
+        sign_idx = (asc_idx + house_num - 1) % 12
+        ruler = TRAD_RULER[sign_idx]
+        rd = n["planets"][ruler]
+        
+        overview = (
+            f"ปีนี้ {fname} อายุ {age} ปี! เรือนที่เปิดสวิตช์ทำงานหลักคือ **เรือนที่ {house_num} ({HOUSE_TH[house_num-1]}) ราศี{SIGN_TH[sign_idx]}**\n"
+            f"🎯 **ธีมใหญ่ของปีนี้:** พลังงานชีวิตแกจะไปกระจุกอยู่ที่เรื่อง **'{HOUSE_TOPICS[house_num]}'** เป็นหลักเลย!\n"
+            f"🪐 **ดาวผู้กุมแส้ปีนี้ (Lord of the Year):** คือดาว **{PLANET_TH[ruler]}** ซึ่งไปสถิตอยู่ในเรือนกำเนิดที่ {rd['house']} ({HOUSE_TH[rd['house']-1]})\n"
+            f"💡 **สแนปชอตชีวิต:** เรื่อง **{HOUSE_TOPICS[house_num]}** จะพาแกไปเกี่ยวพันกับเรื่อง **{HOUSE_TOPICS[rd['house']]}** อย่างหลีกเลี่ยงไม่ได้! เช่น ถ้าปีนี้เน้นเรื่องงาน ก็จะมีเรื่องเงินร่วม/ข้อตกลงเข้ามาให้ตัดสินใจเพิ่มขึ้น เป็นปีที่ต้องลุยแบบมีสติแล้วจะปังมาก!"
+        )
+        
+        sections = [
+            {"title": "✨ ภาพรวม & Focus หลักของปีนี้", "text": overview},
+            {"title": "💼 การงาน & การเรียนปีนี้", "text": f"โฟกัสเรื่องงานจะผูกกับ **{HOUSE_TOPICS[rd['house']]}** ถ้าคิดจะเปลี่ยนงาน ย้ายแผนก หรือเริ่มโปรเจกต์ใหม่ ช่วงปีอายุนี้นับเป็นจังหวะดีที่จะได้ลองอะไรใหม่ๆ แต่ต้องตรวจรายละเอียดสัญญาให้รอบคอบก่อนเซ็นนะ"},
+            {"title": "💰 การเงิน & โชคลาภปีนี้", "text": f"การเงินจะขยับตามแอ็กชันของแกในเรื่อง **{HOUSE_TOPICS[house_num]}** ยิ่งแกทุ่มเทเรื่องนี้ เงินก็ยิ่งไหลเข้า แต่ระวังรายจ่ายแทรกซ้อนจากการเกรงใจคนอื่นด้วย"},
+            {"title": "❤️ ความรัก & ความสัมพันธ์ปีนี้", "text": f"คนมีคู่ จะเป็นปีที่ได้เคลียร์ความเข้าใจและวางแผนอนาคตเรื่อง **{HOUSE_TOPICS[rd['house']]}** ร่วมกัน ส่วนคนโสด มีเกณฑ์เจอคนเข้ามาผูกพันผ่านวงสังคมหรือการทำงานช่วงนี้!"}
+        ]
+        
+        return {
+            "client_name": req.name,
+            "annual_year": req.annual_year,
+            "age": age,
+            "profection_house": house_num,
+            "house_th": HOUSE_TH[house_num-1],
+            "sign_th": SIGN_TH[sign_idx],
+            "lord_of_year": PLANET_TH[ruler],
+            "sections": sections
+        }
+    except Exception as e:
+        raise HTTPException(400, f"คำนวณ Annual Profection ไม่สำเร็จ: {e}")
 
-# -----------------------------------------------------------------------------
-# Footer
-# -----------------------------------------------------------------------------
-st.markdown("---")
-st.caption("🔮 หมายเหตุ: ดวงชะตาเป็นเพียงแผนที่นำทาง แต่คนถือพวงมาลัยคือแกเองนะเพื่อน! ใช้ชีวิตให้สนุกนะ ❤️")
+@app.post("/api/transit")
+def transit(req: TransitRequest):
+    try:
+        n = get_natal(req)
+        fname = get_friendly_name(req.name)
+        jd = jd_for(req.transit_date, "12:00", req.tz)
+        trans = planet_positions(jd)
+        asc_idx = n["angles"]["asc_sign_index"]
+        
+        highlights = []
+        for p in SLOW_PLANETS:
+            t_data = trans[p]
+            h = house_of(t_data["longitude"], asc_idx)
+            highlights.append({
+                "planet": PLANET_TH[p],
+                "house": h,
+                "house_th": HOUSE_TH[h-1],
+                "topic": HOUSE_TOPICS[h],
+                "story": f"ดาว{PLANET_TH[p]} กำลังเดินผ่านเรือน {h} ({HOUSE_TH[h-1]}) ของ {fname} -> ช่วงนี้เรื่อง **'{HOUSE_TOPICS[h]}'** จะมีบททดสอบหรือโอกาสใหม่ๆ เข้ามาให้แกจัดการเป็นพิเศษ!"
+            })
+            
+        return {
+            "client_name": req.name,
+            "transit_date": req.transit_date,
+            "overview": f"เช็กดวงดาวจร ณ วันที่ {req.transit_date} สำหรับ {fname}! ช่วงนี้ดาวใหญ่กำลังย้ายตำแหน่งและส่งแรงกระแทกถึงเรื่องต่างๆ ในชีวิตแก ดังนี้:",
+            "highlights": highlights
+        }
+    except Exception as e:
+        raise HTTPException(400, f"คำนวณ Transit ไม่สำเร็จ: {e}")
+
+if (ROOT/"static").exists():
+    app.mount("/static", StaticFiles(directory=ROOT/"static"), name="static")
